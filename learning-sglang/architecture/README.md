@@ -66,11 +66,3 @@ Three OS processes, connected only by ZeroMQ sockets:
 - **Detokenizer process** — turns generated token IDs back into UTF-8 text, incrementally.
 
 Chapter 1 explains why it's split this way; Chapter 2 traces a request all the way around the loop.
-
-## Conventions used in this book
-
-- **File references** look like `python/sglang/srt/managers/scheduler.py:2670` — click to open.
-- **Symbols** (classes/methods) are in `code font`.
-- **Diagrams** are Mermaid and render on GitHub.
-- Callout boxes marked **Why it matters** connect a mechanism to a real serving concern
-  (latency, throughput, memory).
