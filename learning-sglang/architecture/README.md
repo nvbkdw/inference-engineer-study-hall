@@ -1,8 +1,7 @@
 # SGLang Architecture Walkthrough
 
-A book-style, code-anchored tour of the SGLang model-serving framework — from the
-big picture down to the individual subsystems. Every chapter cites real files, classes,
-and methods (as `path:line` or `path` + symbol) so you can jump straight into the source.
+A high-level code walthrough of the SGLang model-serving framework — from the
+big picture down to the subsystems. Each chapter cites real SGLang files, classes, and methods for easy navigation (though code may change over time).
 
 > Paths are relative to the repository root. Line numbers are accurate as of the tree this
 > was written against; if one has drifted, search for the named class/method instead — those
