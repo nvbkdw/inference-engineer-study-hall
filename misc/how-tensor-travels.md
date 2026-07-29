@@ -1,4 +1,4 @@
-# How does tensor travels through the system?
+# How does tensors move around in the system?
 
 # How PyTorch tensors travel between processes
 
