@@ -3,7 +3,46 @@
 Companion to [README.md](README.md). The curriculum there is hardware-neutral; this file is
 what *your* box can and cannot teach, measured rather than assumed.
 
-Inventory taken 2026-07-27 over SSH. Re-run the commands in §1 if the box changes.
+## DGX Spark Notes
+1. Your GPU has no PCIe data path
+
+000f:01:00.0  LnkCap: 2.5GT/s x16   LnkSta: 2.5GT/s x1 (downgraded)
+
+That's PCIe Gen1 ×1, ~250 MB/s — and the capability is only 2.5 GT/s too, so it's by design, not a misconfiguration. The GB10 GPU isn't data-attached over PCIe at all; it's on-package over NVLink-C2C, and GPU memory is the 119 GiB of LPDDR5X, coherently shared. That's why nvidia-smi reports memory as "Not Supported / 0 MiB".
+
+So a real chunk of the plan I wrote yesterday is dead on this box: pinned vs pageable memory, H2D bandwidth, copy/compute overlap, and GPUDirect Storage-to-VRAM all optimize a copy that doesn't exist here. In exchange you get the GH200/GB200 coherent programming model locally, which almost nobody can practice — so I replaced the GDS lab with a coherent-memory lab (managed vs system-allocated vs explicit, migration behavior, and a 150 GB-over-119 GB oversubscription test that is literally the SSD-as-VRAM thesis arriving through the driver's front door).
+
+2. Your storage:memory gap is 20:1, not 240:1
+
+┌───────────────────────┬─────────────┬──────────────────────────┐
+│                       │ H100 server │          Spark           │
+├───────────────────────┼─────────────┼──────────────────────────┤
+│ GPU-visible bandwidth │ 3350 GB/s   │ 273 GB/s                 │
+├───────────────────────┼─────────────┼──────────────────────────┤
+│ NVMe read             │ ~14 GB/s    │ ~14 GB/s (Gen5 ×4, real) │
+├───────────────────────┼─────────────┼──────────────────────────┤
+│ Gap                   │ 240:1       │ 20:1                     │
+└───────────────────────┴─────────────┴──────────────────────────┘
+
+Same drive class, 12× less memory bandwidth to lose. The SSD-as-VRAM capstone is structurally easier on your box than on the consumer desktop the WiCi post targets. Running the arithmetic for a 750B/40B-active MoE at 4-bit: fully resident would be ~13.7 tok/s, 32% resident at uniform access is ~1 tok/s, 90% hit rate gets ~7 tok/s. That's a live 1→14 tok/s ladder to climb, not a foregone conclusion — a genuinely good capstone target.
+
+Other things worth knowing
+
+- Two L3 domains, asymmetric: cpu0–9 share 8 MB, cpu10–19 share 16 MB. Each cluster is 5× A725 + 5× X925. Cluster 1 is strictly better (2× L3, higher clocks). Benchmark on cpu15–19.
+- ARM's weak memory model is an asset — your Phase-1 lock-free ring buffer will actually be tested, where x86 TSO would hide the missing barriers.
+- max_hw_sectors_kb=128 caps I/O size, so hitting the BDP target (~1.1 MB in flight) needs QD ≥ 9 minimum, realistically 32–64. Concrete Phase-2 arithmetic.
+- VFIO target problem solved: your only NVMe is the boot drive with / on it — never unbind it. But you have two idle ConnectX-7 cards and an unused Realtek NIC, and SMMUv3 is active with iommu.passthrough=0. Use a NIC function.
+- Drop the resctrl cache-partitioning exit test — x86-only, and ARM MPAM isn't exposed here.
+- Noise: k8s/flannel + docker + ~14 veths are running. Quiet the box or your p99s are fiction.
+
+Highest-leverage upgrade
+
+A QSFP112 DAC loopback cable between your two physically separate ConnectX-7 cards (PCI domains 0000 and 0002). All four ports are currently DOWN with no cable. One cable turns Phase 6 from "Soft-RoCE API practice" into real 200 GbE line-rate numbers between two processes on one machine. I've flagged it as unverified — mlx5 card-to-card loopback on one host normally works, but confirm before buying, and put each port in its own netns so traffic actually leaves the NIC.
+
+Everything the Spark can't cover (PCIe H2D, GDS, NVLink/NCCL, MIG, NUMA) is ~3 focused weekends of cloud H100 time, roughly $50–150 total. No hardware purchase needed.
+
+Section 6 of the lab doc has a copy-pasteable first week: the apt install list (fio, liburing-dev, rustc and libibverbs-dev are all missing), the box-quieting steps, three baseline measurements, and Soft-RoCE bring-up so verbs are available today.
+
 
 ---
 
