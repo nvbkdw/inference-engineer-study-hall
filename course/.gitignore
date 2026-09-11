@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+results/
+models/
+*.nsys-rep
+*.ncu-rep
+
+.spark-deps/
+.venv-spark/
+.venv-correctness/

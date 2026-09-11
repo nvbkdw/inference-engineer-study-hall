@@ -1,0 +1,34 @@
+[project]
+name = "qwen3-inference-engineering-course"
+version = "0.1.0"
+description = "Lab-driven performance modeling of LLM inference on DGX Spark"
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+dependencies = [
+    "torch>=2.9,<3",
+    "numpy>=2,<3",
+    "matplotlib>=3.9,<4",
+    "transformers>=5,<6",
+    "safetensors>=0.6,<1",
+    "accelerate>=1,<2",
+    "huggingface-hub>=1,<2",
+]
+
+[project.optional-dependencies]
+# P4 student-authored CuTe kernels; match examples and driver to the chosen release.
+kernels = [
+    "nvidia-cutlass-dsl[cu13]>=4.2,<5; sys_platform == 'linux'",
+]
+
+[tool.uv]
+# Chapters are standalone scripts, not an installable Python package.
+package = false
+
+[tool.uv.sources]
+# Spark (Linux aarch64) and Linux rental GPUs use CUDA-enabled PyTorch.
+torch = [{ index = "pytorch-cu130", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
