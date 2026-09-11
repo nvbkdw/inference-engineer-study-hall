@@ -17,9 +17,9 @@ def main():
                   num_key_value_heads=2,head_dim=8,vocab_size=101,tie_word_embeddings=False,
                   rope_parameters={'rope_type':'default','rope_theta':1e6})
     model=Qwen3ForCausalLM(c).eval()
-    model.save_pretrained(a.out,max_shard_size='20KB')
+    model.save_pretrained(a.out, max_shard_size='20KB')
     (a.out/'tokens.json').write_text(json.dumps(dict(kind='random tiny fixture; no text quality',
-        prompt_ids=[1,4,9,16,25,36,49],continuation_ids=[64,81,2]))+'\n')
+        prompt_ids=[1,4,9,16,25,36,49], continuation_ids=[64,81,2]))+'\n')
     print(f'Created local-tiny-v1 in {a.out}; random weights are not a pretrained model.')
 
 
