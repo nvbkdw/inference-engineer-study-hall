@@ -9,7 +9,7 @@ Completing entry goals alone does not complete the full project.
 |---|---|---|
 | Entry: sharding identity | Untimed sharding oracle passes; NCCL MLP passes on two physical GPUs | lab output from simulated and real distributed paths |
 | Entry: communication prediction | 3 calibration and 3 withheld sizes on two distinct CUDA GPUs with NCCL, >=3 repeats; all reduced elements equal 3 | calibration.csv, prediction.json, summary.json |
-| Full: model validation | Single attention/MLP layer, full tiny decoder, 8B prefill/decode, selected 32B inputs all pass declared numerical criteria | TP=1/2 logit comparisons |
+| Full: model validation | Single attention/MLP layer from 8B, full 8B prefill/decode, selected 32B inputs all pass declared numerical criteria | TP=1/2 logit comparisons |
 | Full: accounting | Report actual collectives/payloads and replicated vs sharded weight/KV bytes; investigate differences from 2 reductions/layer | trace and per-rank inventory |
 | Full: equal-resource comparison | One TP=2 versus two feasible TP=1 replicas on the same 2 GPUs; fixed traces/SLOs; >=3 repeats | latency/goodput/memory curves |
 | Decision | Select TP or replicas for both models; distinguish capacity-only advantages and unmeasured cross-node extensions | placement memo and scaling prediction |
@@ -31,4 +31,3 @@ Before the oral defense, reproduce one equation without the code, identify one
 failed hypothesis, and explain the scope of each figure: measured, modeled, or
 illustrative. Use the chapter tutorial's defense questions and retain the exact
 source revision and experiment manifest with your submission.
-

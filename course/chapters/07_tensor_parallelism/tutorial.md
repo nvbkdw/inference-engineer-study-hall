@@ -35,7 +35,7 @@ features and down over that same input axis. Keep norms and vocabulary matrices
 replicated initially and charge their full storage to each rank.
 
 At TP=2, assign four KV heads per rank for both models. Validate one attention
-layer with GQA, one full tiny decoder, then 8B prefill/incremental decode against
+layer from the real 8B checkpoint with GQA, then full 8B prefill/incremental decode against
 TP=1. Repeat selected 32B inputs. Include chunked-prefill and ragged cache lengths.
 Investigate reduction-order differences with documented numerical criteria.
 

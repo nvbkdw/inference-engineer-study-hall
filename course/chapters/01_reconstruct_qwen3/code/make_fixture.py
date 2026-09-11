@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import torch
 from transformers import Qwen3Config,Qwen3ForCausalLM
+from lab import Config
 
 
 def main():
@@ -13,9 +14,12 @@ def main():
     if a.out.exists() and any(a.out.iterdir()):
         p.error('output directory must be empty')
     torch.manual_seed(42)
-    c=Qwen3Config(hidden_size=48,intermediate_size=96,num_hidden_layers=2,num_attention_heads=8,
-                  num_key_value_heads=2,head_dim=8,vocab_size=101,tie_word_embeddings=False,
-                  rope_parameters={'rope_type':'default','rope_theta':1e6})
+    tiny=Config()
+    c=Qwen3Config(hidden_size=tiny.hidden,intermediate_size=tiny.intermediate,
+                  num_hidden_layers=tiny.layers,num_attention_heads=tiny.q_heads,
+                  num_key_value_heads=tiny.kv_heads,head_dim=tiny.head_dim,
+                  vocab_size=tiny.vocab,rms_norm_eps=tiny.eps,tie_word_embeddings=False,
+                  rope_parameters={'rope_type':'default','rope_theta':tiny.theta})
     model=Qwen3ForCausalLM(c).eval()
     model.save_pretrained(a.out, max_shard_size='20KB')
     (a.out/'tokens.json').write_text(json.dumps(dict(kind='random tiny fixture; no text quality',

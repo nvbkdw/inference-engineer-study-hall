@@ -35,7 +35,7 @@ the tutorial in order, and consult the annotated references at each milestone.
 
 Sharding diagrams; full-model checks; collective curves; predicted versus observed scaling; placement decision.
 
-- [ ] TP layers, full tiny model, 8B, and selected 32B cases pass.
+- [ ] TP layers from 8B, full 8B, and selected 32B cases pass.
 - [ ] Small-message communication and replicated memory are accounted for.
 - [ ] Replica comparisons are feasible and use the same two GPUs/arrivals.
 

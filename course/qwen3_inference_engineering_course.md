@@ -305,7 +305,7 @@ Add CUDA graphs, compilation, allocator reservation, KV block size, clocks/therm
 
 Implement RMSNorm with appropriate accumulation precision, RoPE with explicit absolute positions, Q/K normalization, GQA with causal masking, SwiGLU, residual blocks, final normalization, and the untied output head.
 
-Start with a tiny random configuration on CPU in FP32. Compare each block with a simple mathematical oracle. Use a rectangular attention case and unequal query/KV head counts.
+Use the single course Qwen3 tiny configuration `(L,D,I,Hq,Hkv,R,V)=(2,48,96,8,2,8,101)` for Chapter 1 correctness and DGX Spark timing in FP32. CPU execution is an optional untimed mathematical oracle. Keep the model dimensions fixed while varying workloads. Then move to real 8B and 32B checkpoints; subsequent chapters use those models. Compare each block with a simple mathematical oracle. Use a rectangular attention case and unequal query/KV head counts.
 
 Then implement checkpoint loading. Produce a table mapping every checkpoint tensor name and shape to your module. Assert that required weights are consumed and shapes match. Avoid silently initializing an unmapped Q/K norm.
 
@@ -690,7 +690,7 @@ One real quantized path is evaluated on both models, its actual execution is ide
 
 ### Week 13: shard a layer, then the decoder
 
-Start with a tiny configuration and deterministic inputs. In PyTorch’s stored weight layout, distinguish splitting output features from splitting input features.
+Start with one layer from the real Qwen3-8B checkpoint and deterministic inputs. In PyTorch’s stored weight layout, distinguish splitting output features from splitting input features.
 
 Implement:
 
@@ -704,7 +704,7 @@ Use `torch.distributed` and NCCL for communication. Replicate the embedding and 
 
 At TP=2, both models’ eight KV heads divide cleanly. Each rank can own four KV heads and half the KV cache. Scaling beyond the number of KV heads requires another placement choice; cache memory does not divide indefinitely with TP degree.
 
-Validate a single layer, a full tiny decoder, then 8B prefill/decode against TP=1. Finally validate selected 32B inputs. Document reduction-order differences and run the established numerical checks.
+Validate a single 8B layer, then full 8B prefill/decode against TP=1. Finally validate selected 32B inputs. Document reduction-order differences and run the established numerical checks.
 
 ### Week 14: compare two uses of the same hardware
 

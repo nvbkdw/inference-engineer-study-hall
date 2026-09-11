@@ -7,7 +7,7 @@ Completing entry goals alone does not complete the full project.
 
 | Goal | Measurable acceptance condition | Required evidence |
 |---|---|---|
-| Entry: cache bytes | Exact agreement at S=128,256,512,1024,2048; default FP32 CUDA slope 4096 bytes/token | memory.csv and slope derivation |
+| Entry: cache bytes | Exact agreement at S=128,256,512,1024,2048; Qwen3 tiny FP32 CUDA slope 256 bytes/token | memory.csv and slope derivation |
 | Entry: cache correctness | All five CUDA next-logit comparisons pass rtol=1e-4/atol=1e-5; original unequal-chunk checks pass | summary.json and lab output |
 | Full: weight inventory | 100% trainable checkpoint tensors mapped for both models; zero unexplained missing/unexpected tensors | 8B/32B mapping CSV and shape audit |
 | Full: numerical equivalence | Both models: selected full-vocabulary logits; 8B: full, incremental, unequal chunks, mixed batch; document BF16 criteria before acceptance | saved reference/custom comparisons |

@@ -11,7 +11,7 @@ From the `course/` directory, complete the DGX Spark environment checks in
 [setup](../../shared/SETUP.md), activate your Spark-compatible CUDA environment, and confirm that PyTorch and
 Matplotlib import. Keep the whole course checkout so the shared helpers resolve.
 
-For a scaled FP32 CUDA cache, derive `2*L*Hkv*R*4*S`. Predict the byte slope and explain why a cached one-token call can avoid most prefix computation without making its attention cost constant.
+For the Qwen3 tiny FP32 CUDA cache, derive `2*L*Hkv*R*4*S`. Predict the byte slope and explain why a cached one-token call can avoid most prefix computation without making its attention cost constant.
 
 The optional `lab.py` command is an untimed CPU correctness oracle. All times from `experiment.py` use CUDA events on the GPU; no CPU fallback is provided.
 
@@ -25,9 +25,9 @@ OMP_NUM_THREADS=1 python chapters/01_reconstruct_qwen3/code/lab.py
 python chapters/01_reconstruct_qwen3/code/experiment.py --out results/p01-first --repeats 3
 ```
 
-Inspect `Config.kv_bytes`, `TinyQwen.forward`, and the `cached`/`full` functions in `code/experiment.py`. The measured model uses L=2,D=512,I=1536,Hq=8,Hkv=2,R=128,V=4096 in FP32 on CUDA. Each method produces the same next-position logits; both project only the last position to vocabulary. Cache preparation and token creation are outside timing; cache concatenation remains inside the cached forward.
+Inspect `Config.kv_bytes`, `TinyQwen.forward`, and the `cached`/`full` functions in `code/experiment.py`. Both correctness and timing use the same default `Config()`: L=2,D=48,I=96,Hq=8,Hkv=2,R=8,V=101. Timing runs in FP32 on CUDA; the offline checkpoint generator also reads this configuration. Each method produces the same next-position logits; both project only the last position to vocabulary. Cache preparation and token creation are outside timing; cache concatenation remains inside the cached forward.
 
-The CUDA helper warms the workload ten times and synchronizes its end event. Python reference paths can include host-dispatch gaps, so these are workload intervals, not isolated fused-kernel times. The manifest records the actual GPU and CUDA build.
+The CUDA helper warms the workload ten times and synchronizes its end event. Python reference paths can include host-dispatch gaps, so these are workload intervals, not isolated fused-kernel times. The manifest records the actual GPU and CUDA build; `prediction.json` records the model dimensions. At this tiny scale, dispatch overhead can dominate, so explain the observed curve without assuming it predicts 8B/32B performance.
 
 Use a different `--out` directory for every rerun. Nonempty destinations are
 rejected so earlier predictions and observations remain reviewable.
@@ -45,14 +45,14 @@ minimum and maximum, not a confidence interval.
 
 Use `memory.csv` to compute `(bytes_at_2048 - bytes_at_128)/(2048-128)` and compare it with the saved prediction. From `results.csv`, compute the median recomputed/cached time ratio at every length. Explain the difference between equal logical work at the output boundary and different work performed internally.
 
-Change the tiny config from two to four layers and rerun to a new directory. Predict the cache slope before running. It must double; latency need not double exactly. Then change only the chunk partition in `lab.py` and verify unchanged logits.
+Keep the model configuration fixed. Add S=768 to the context-length sweep and rerun to a new directory. Predict its cache bytes before running: `768*256 = 196608`. Then change only the chunk partition in `lab.py` and verify unchanged logits.
 
 Keep the original result and document changed code/input separately. The manifest
 records source hashes, software, seed where relevant, and measurement scope.
 
 ## 5. Check your reasoning
 
-The default slope is 4096 bytes/token: `2*2*2*128*4`. Doubling layers doubles this storage exactly. The attention cache does not store the query heads, and allocator reservation is not part of this logical count.
+The slope is 256 bytes/token: `2*2*2*8*4`. Doubling processed context length doubles this storage exactly. The attention cache does not store the query heads, and allocator reservation is not part of this logical count.
 
 Submit the result directory and a 400–600 word entry-lab note containing your
 original prediction, one calculation reproduced from CSV, a figure interpretation,

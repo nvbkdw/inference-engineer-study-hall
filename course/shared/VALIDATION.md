@@ -24,7 +24,7 @@ with three repeats, using CUDA events and CUDA tensors:
 
 | Chapter | Checked workload and evidence |
 |---|---|
-| P1 | Scaled two-layer FP32 CUDA model; cached/recomputed next logits agree; five cache-byte checks at S=128–2048; 30 timing rows |
+| P1 (original migration run) | Earlier larger random fixture, now retired; cached/recomputed next logits agree; five cache-byte checks at S=128–2048; 30 timing rows |
 | P3 | BF16 K=N=4096 GEMMs; 128 MiB copy calibration; predictions saved before six held-out shapes; 24 prediction/measurement rows |
 | P4 | FP32 CUDA attention with R=128; dense/tiled outputs agree for 12 cases; 36 timing rows and score-storage accounting |
 | P6 | FP32 CUDA 1024x4096 random layers; nibble roundtrip, output errors, storage, and reconstruction/GEMM timing; 30 error rows |
@@ -36,6 +36,18 @@ modeling, not GPU or CPU performance measurement.
 Raw migration-run artifacts are under `results/spark-migration/` in the authoring
 workspace. They are ignored experiment outputs; regenerate them using the chapter
 commands when copying the course elsewhere.
+
+### Chapter 1 unified tiny configuration
+
+After removing the larger timing fixture, P1 was rerun on the same GB10 using
+the single `Config()` shared by mathematical checks, checkpoint generation,
+and timing: `(L,D,I,Hq,Hkv,R,V)=(2,48,96,8,2,8,101)` in FP32.
+Artifacts are in `results/p01-unified-tiny/`: 30 timing rows, five exact cache-byte
+matches, a 256-byte/token cache slope, and maximum absolute cached/recomputed
+logit error of `2.384185791015625e-07`. The existing nine mathematical tests and
+the offline sharded-checkpoint comparison test also passed in the CPU correctness
+environment. The earlier larger-fixture results remain historical evidence;
+they do not describe the current Chapter 1 model.
 
 ## Test results
 

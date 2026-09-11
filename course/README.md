@@ -14,6 +14,8 @@ The course is a **16-week research project using Qwen3-8B and Qwen3-32B**, with 
 
 The plan assumes **15–18 focused hours per week**, familiarity with Python/PyTorch, linear algebra, probability, and basic GPU programming. Prior CuTe DSL study and a Mini-SGLang implementation are useful; the setup guide identifies preparation work for students who need it.
 
+**Model progression: one Qwen3 tiny configuration for Chapter 1 correctness and Spark timing, then real Qwen3-8B and Qwen3-32B checkpoints.** Tiny has `(L,D,I,Hq,Hkv,R,V)=(2,48,96,8,2,8,101)` and is confined to Chapter 1.
+
 **8B is your daily development model; 32B tests whether your performance explanations hold at larger scale.** Both use the same configuration-driven GQA implementation, though their dimensions differ. During speculative decoding, 8B becomes the draft and 32B the target. [8B configuration](https://huggingface.co/Qwen/Qwen3-8B/raw/main/config.json), [32B configuration](https://huggingface.co/Qwen/Qwen3-32B/raw/main/config.json)
 
 | Weeks     | Project                                                                         | Main result                                                        |

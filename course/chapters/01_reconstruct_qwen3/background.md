@@ -3,7 +3,8 @@
 ## Dimension symbols and concrete configurations
 
 **Qwen3 tiny** below means this course's randomly initialized teaching model:
-the default `Config` in [code/lab.py](code/lab.py), also used by the
+the default `Config` in [code/lab.py](code/lab.py), used for both Chapter 1
+correctness and [Spark timing](code/experiment.py), as well as the
 [offline checkpoint fixture](code/make_fixture.py). It is not an official
 pretrained Qwen release. The 8B and 32B columns use the published checkpoint
 configurations, rather than the defaults of the `Qwen3Config` Python class.
@@ -38,10 +39,12 @@ have no fixed checkpoint values. Full prefill has `p=0, S=T`; one-token cached
 decode has `T=1, S=p+1`. These diagrams assume equal lengths within a batch;
 ragged serving tracks a separate `p` and `S` for each request.
 
-The Spark timing experiment deliberately uses a larger random fixture:
-`(L,D,I,Hq,Hkv,R,V)=(2,512,1536,8,2,128,4096)` in
-[code/experiment.py](code/experiment.py). Use those values when interpreting its
-measurements; the table's tiny column describes the smaller correctness fixture.
+Use the same Qwen3 tiny dimensions for all Chapter 1 introductory checks and
+timings: `(L,D,I,Hq,Hkv,R,V)=(2,48,96,8,2,8,101)`. Its FP32 KV cache grows by
+`2*2*2*8*4 = 256` bytes per processed token per request. Keep these dimensions
+fixed while varying the input workload. Tiny is used only in Chapter 1; after
+the introductory lab, load the real Qwen3-8B and Qwen3-32B checkpoints for
+Chapter 1's full-model validation and subsequent chapters' model experiments.
 
 Shapes below count elements, not bytes. Stored linear weights are
 `[out_features,in_features]`: a linear layer computes `Y = X @ W.T`.

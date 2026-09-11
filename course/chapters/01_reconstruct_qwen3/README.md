@@ -1,7 +1,7 @@
 # Chapter 1: Reconstructing Qwen3
 
 **P1 · Weeks 1–2 · 30–36 hours**  
-**Laboratory:** DGX Spark measurements; optional CPU mathematical oracle; 8B daily and 32B validation
+**Laboratory:** one Qwen3 tiny configuration for correctness and DGX Spark timing; then real 8B and 32B checkpoint validation
 
 Can one configuration-driven implementation reproduce both checkpoints and their cached generation?
 

@@ -10,7 +10,7 @@ in order. Read the relevant background before executing the sample.
 
 | Project | Standalone tutorial | Measurable goals | Entry experiment scope |
 |---|---|---|---|
-| P1 | [Cache correctness and memory](../chapters/01_reconstruct_qwen3/standalone.md) | [P1 goals](../chapters/01_reconstruct_qwen3/assessment.md) | Scaled FP32 CUDA model on Spark: device-interval decode time and logical cache bytes |
+| P1 | [Cache correctness and memory](../chapters/01_reconstruct_qwen3/standalone.md) | [P1 goals](../chapters/01_reconstruct_qwen3/assessment.md) | Qwen3 tiny, shared with Chapter 1 correctness: FP32 CUDA decode time and logical cache bytes on Spark |
 | P2 | [Bounded scheduling](../chapters/02_runtime_and_kv/standalone.md) | [P2 goals](../chapters/02_runtime_and_kv/assessment.md) | Real allocator logic with explicitly simulated service times |
 | P3 | [Held-out prediction](../chapters/03_performance_model/standalone.md) | [P3 goals](../chapters/03_performance_model/assessment.md) | Actual Spark BF16 GEMM calibration, frozen predictions, six held-out shapes |
 | P4 | [Tiled attention](../chapters/04_kernels/standalone.md) | [P4 goals](../chapters/04_kernels/assessment.md) | Actual Spark CUDA workload time and modeled score storage |
