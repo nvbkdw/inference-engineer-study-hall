@@ -12,6 +12,8 @@ dependencies = [
     "safetensors>=0.6,<1",
     "accelerate>=1,<2",
     "huggingface-hub>=1,<2",
+    "ipykernel>=6,<8",
+    "jupyterlab>=4,<5",
 ]
 
 [project.optional-dependencies]

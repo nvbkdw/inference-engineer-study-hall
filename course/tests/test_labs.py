@@ -8,6 +8,10 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def module(chapter):
+    if chapter == '01':
+        sys.path.insert(0, str(ROOT/'chapters/01_reconstruct_qwen3/code'))
+        from notebook_utils import load_notebook_implementation
+        return load_notebook_implementation()
     path = next((ROOT/'chapters').glob(f'{chapter}_*/code/lab.py'))
     name = f'chapter_{chapter}'
     spec = importlib.util.spec_from_file_location(name, path)
@@ -49,7 +53,12 @@ class TensorLabs(unittest.TestCase):
 
     def test_qwen_cache_and_parameter_inventory(self):
         m = module('01')
-        m.check()
+        import torch
+        if not torch.cuda.is_available() or not (ROOT/'models/qwen3-tiny/provenance.json').is_file():
+            self.skipTest('Prepared two-layer Qwen3 weights and Spark CUDA required')
+        sys.path.insert(0, str(ROOT/'chapters/01_reconstruct_qwen3/code'))
+        from notebook_utils import check_cache
+        check_cache(m.TinyQwen3, m.model_weight_name_mapping)
         for c, parameters, kv in [
             (m.Config(36,4096,12288,32,8,128,151936),8190735360,147456),
             (m.Config(64,5120,25600,64,8,128,151936),32762123264,262144),

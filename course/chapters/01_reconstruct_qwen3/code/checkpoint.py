@@ -3,7 +3,29 @@ import json
 from pathlib import Path
 from safetensors import safe_open
 import torch
-from lab import Config,TinyQwen
+from dataclasses import dataclass
+
+
+@dataclass
+class CheckpointConfig:
+    """Parsed metadata for auditing; the executable model is defined in lab.ipynb."""
+    layers: int = 2
+    hidden: int = 4096
+    intermediate: int = 12288
+    q_heads: int = 32
+    kv_heads: int = 8
+    head_dim: int = 128  # Read explicitly; full 32B has hidden != q_heads * head_dim.
+    vocab: int = 151936
+    eps: float = 1e-6
+    theta: float = 1e6
+
+    def parameters(self):
+        d, h, g, r, i = self.hidden, self.q_heads, self.kv_heads, self.head_dim, self.intermediate
+        return self.layers * (2*d*h*r + 2*d*g*r + 3*d*i + 2*d + 2*r) + 2*self.vocab*d + d
+
+    def kv_bytes(self, tokens, element_bytes=2):
+        return 2*self.layers*self.kv_heads*self.head_dim*element_bytes*tokens
+
 
 
 def configuration(snapshot):
@@ -17,7 +39,7 @@ def configuration(snapshot):
     rope=data.get('rope_parameters') or data.get('rope_scaling') or {}
     if rope.get('rope_type',rope.get('type','default'))!='default':
         raise ValueError('scaled RoPE requires a separate implementation')
-    c=Config(data['num_hidden_layers'],data['hidden_size'],data['intermediate_size'],
+    c=CheckpointConfig(data['num_hidden_layers'],data['hidden_size'],data['intermediate_size'],
              data['num_attention_heads'],data['num_key_value_heads'],data['head_dim'],
              data['vocab_size'],data['rms_norm_eps'],rope.get('rope_theta',data.get('rope_theta',1e6)))
     if c.q_heads%c.kv_heads or c.head_dim%2:
@@ -25,25 +47,23 @@ def configuration(snapshot):
     return c,data
 
 
-def mapping(c):
-    names={'model.embed_tokens.weight':'embed.weight','model.norm.weight':'norm.weight','lm_head.weight':'head.weight'}
-    suffixes={'input_layernorm':'input_norm','post_attention_layernorm':'post_norm',
-              'self_attn.q_norm':'q_norm','self_attn.k_norm':'k_norm'}
-    suffixes.update({f'self_attn.{name}_proj':name for name in ['q','k','v','o']})
-    suffixes.update({f'mlp.{name}_proj':name for name in ['gate','up','down']})
-    for layer in range(c.layers):
-        for original,destination in suffixes.items():
-            names[f'model.layers.{layer}.{original}.weight']=f'layers.{layer}.{destination}.weight'
-    return names
-
-
-def load_custom(snapshot,device='cpu',dtype=torch.float32,audit_only=False):
+def load_custom(snapshot,device='cpu',dtype=torch.float32,audit_only=False,
+                *,model_factory,name_map_factory):
+    """Audit/load a model; notebooks may supply their own class and name mapping."""
     snapshot=Path(snapshot)
     c,data=configuration(snapshot)
     with torch.device('meta'):
-        model=TinyQwen(c).to(dtype=dtype)
-    names=mapping(c)
+        model=model_factory(c).to(dtype=dtype)
+    names=name_map_factory(c)
     params=dict(model.named_parameters())
+    expected=set(names.values())
+    missing=sorted(expected-set(params))
+    unexpected=sorted(set(params)-expected)
+    if len(expected)!=len(names) or missing or unexpected:
+        raise ValueError(
+            f'Candidate parameter layout mismatch; missing={missing}; unexpected={unexpected}. '
+            'Check Q/K norms, bias-free projections, and destination names.'
+        )
     index=snapshot/'model.safetensors.index.json'
     if index.exists():
         indexed=json.loads(index.read_text())['weight_map']

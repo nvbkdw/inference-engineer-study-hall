@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 import sys
 import time
+from functools import partial
 sys.path.insert(0,str(Path(__file__).resolve().parents[3]/'shared'))
 from experiment import write_json,write_csv
 from checkpoint import configuration,load_custom
+from notebook_utils import load_notebook_implementation
 from safetensors.torch import save_file
 import torch
 
@@ -23,6 +25,9 @@ def main():
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--audit-only',action='store_true')
     a=p.parse_args()
+    implementation=load_notebook_implementation()
+    load_candidate=partial(load_custom,model_factory=implementation.TinyQwen3,
+                           name_map_factory=implementation.model_weight_name_mapping)
     if a.out.exists() and any(a.out.iterdir()):
         p.error('output directory must be empty')
     c,data=configuration(a.snapshot)
@@ -37,6 +42,10 @@ def main():
     device=torch.device(a.device)
     if device.type=='cpu':
         torch.set_num_threads(1)
+    elif device.type=='cuda':
+        torch.cuda.set_device(device)
+        torch.backends.cuda.matmul.allow_tf32 = False
+        torch.backends.cudnn.allow_tf32 = False
     def sync():
         if device.type=='cuda':
             torch.cuda.synchronize(device)
@@ -47,13 +56,14 @@ def main():
         continuation_tokens=len(continuation),sampling='teacher-forced supplied continuation',
         attention='eager dense reference',timing='cold, synchronized diagnostic; not a steady-state benchmark',
         source_sha256={name:hashlib.sha256((Path(__file__).parent/name).read_bytes()).hexdigest()
-                       for name in ['lab.py','checkpoint.py','run_checkpoint.py']})
+                       for name in ['lab.ipynb','notebook_utils.py','checkpoint.py','run_checkpoint.py']})
+    (a.out/'implementation_notebook.ipynb').write_bytes((Path(__file__).parent/'lab.ipynb').read_bytes())
     write_json(a.out/'manifest.json',manifest)
     if device.type=='cuda':
         torch.cuda.reset_peak_memory_stats(device)
     start=time.perf_counter()
     # Audit headers without allocating full weights, including for the HF reference path.
-    _,inventory=load_custom(a.snapshot,audit_only=True)
+    _,inventory=load_candidate(a.snapshot,audit_only=True)
     write_json(a.out/'inventory.json',inventory)
     write_json(a.out/'memory_prediction.json',dict(parameters=c.parameters(),
         parameter_bytes=c.parameters()*(4 if a.dtype=='fp32' else 2),
@@ -62,7 +72,7 @@ def main():
         print(f'Audited {len(inventory)} tensors and {c.parameters()} parameters without allocating model storage.')
         return
     if a.backend=='custom':
-        model,_=load_custom(a.snapshot,device,dtype)
+        model,_=load_candidate(a.snapshot,device,dtype)
     else:
         import transformers
         from transformers import AutoModelForCausalLM
@@ -79,7 +89,7 @@ def main():
             sync()
             start=time.perf_counter()
             if a.backend=='custom':
-                logits,cache=model(ids_tensor,cache,last_only=True)
+                logits,cache=model(ids_tensor,cache,decode=True)
             else:
                 output=model(input_ids=ids_tensor,past_key_values=cache,use_cache=True,logits_to_keep=1)
                 logits,cache=output.logits,output.past_key_values

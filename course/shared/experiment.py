@@ -24,14 +24,14 @@ def cuda_environment(device='cuda:0'):
                 device_total_memory_bytes=properties.total_memory)
 
 
-def begin(chapter, description, assumptions, *, measurement=True):
+def begin(chapter, description, assumptions, *, measurement=True, argv=None):
     parser = argparse.ArgumentParser(description=description)
     parser.add_argument('--out', type=Path, required=True, help='New/empty output directory')
     parser.add_argument('--repeats', type=int, default=5)
     parser.add_argument('--seed', type=int, default=42)
     if measurement:
         parser.add_argument('--device', default='cuda:0', help='CUDA device; no CPU timing fallback')
-    args = parser.parse_args()
+    args = parser.parse_args(argv)
     if args.repeats < 3:
         parser.error('use at least three repeats')
     if args.out.exists() and any(args.out.iterdir()):

@@ -1,9 +1,14 @@
 # LLM Inference Engineering
 
-**Companion labs are now available:** start with the [course chapter index](README.md)
+**Begin with [Chapter 0: From text to a serving system](chapters/00_introduction/README.md).** This conceptual introduction has no code or projects.
+
+**Companion labs are now available:** see the [course chapter index](README.md)
 and [laboratory setup](shared/SETUP.md). Each of the eight project folders contains
 background, a step-by-step tutorial, executable teaching samples, and annotated
-references. The project scope and assessment requirements below remain the syllabus.
+references. Chapter 1 consolidates theory/readings in `background.md` and practical
+steps in [Lab 1](chapters/01_reconstruct_qwen3/code/lab.ipynb) and
+[Lab 2](chapters/01_reconstruct_qwen3/code/lab2.ipynb), including its completion checklist.
+The project scope and assessment requirements below remain the syllabus.
 
 ## A project-driven semester with Qwen3-8B and Qwen3-32B
 
@@ -11,7 +16,7 @@ references. The project scope and assessment requirements below remain the sylla
 **Duration:** 16 weeks, approximately 15–18 focused hours per week  
 **Primary laboratory:** your DGX Spark  
 **Additional laboratory:** prepared rentals of connected H100 GPUs; B300 is an optional hardware comparison  
-**Final product:** one evolving experimental inference engine, eight research reports, and the foundations of an eight-chapter textbook or blog series
+**Final product:** one evolving experimental inference engine, eight research reports, and the foundations of a textbook or blog series with an introduction and eight project chapters
 
 The central question for the semester is:
 
@@ -22,6 +27,34 @@ Qwen3-8B is the everyday implementation and debugging model. Qwen3-32B tests whe
 This plan starts from your existing experience: PMPP, CuTe DSL elementwise and GEMM work, a Mini-SGLang replication, and familiarity with SGLang and Dynamo. It does not require repeating an introductory GPU programming course.
 
 All timings, experiment sizes, assessment targets, and rental allocations below are proposed course choices. The architecture and hardware facts are sourced; performance results must come from your experiments. No benchmark has been run for this syllabus.
+
+---
+
+## 0. Introduction — architecture and the inference system
+
+Begin Week 1 with [Chapter 0](chapters/00_introduction/README.md). Reserve
+approximately 3–4 hours from the existing Week 1 reading allocation. This is a
+conceptual chapter with equations, worked examples, and diagrams; it has no code,
+project, assessment, or required submission. The eight projects and 16-week
+schedule remain unchanged.
+
+The reading proceeds from a token to the complete serving system:
+
+1. **Transformer architecture:** autoregressive probability; encoder/decoder
+   distinctions; tokenization and vocabulary tradeoffs; embeddings; residuals and
+   RMSNorm; self-attention and GQA; rotary position encoding; SwiGLU MLPs; logits
+   and sampling.
+2. **LLM inference and serving:** prefill and decode; KV reuse and memory growth;
+   request state; continuous batching and chunked prefill; vLLM and SGLang;
+   paging, prefix reuse, latency, throughput, goodput, and speculative decoding.
+3. **Distribution and performance modeling:** replicas, tensor and pipeline
+   parallelism; prefill/decode disaggregation and state transfer; arithmetic
+   intensity, critical paths, queueing, and capacity balance across kernel,
+   model, server, and system boundaries.
+
+The purpose is to establish the mathematical and systems intuition that later
+projects make concrete. Chapter 0 uses the existing 8B/32B architecture examples
+and introduces no additional model fixtures.
 
 ---
 
@@ -305,7 +338,7 @@ Add CUDA graphs, compilation, allocator reservation, KV block size, clocks/therm
 
 Implement RMSNorm with appropriate accumulation precision, RoPE with explicit absolute positions, Q/K normalization, GQA with causal masking, SwiGLU, residual blocks, final normalization, and the untied output head.
 
-Use the single course Qwen3 tiny configuration `(L,D,I,Hq,Hkv,R,V)=(2,48,96,8,2,8,101)` for Chapter 1 correctness and DGX Spark timing in FP32. CPU execution is an optional untimed mathematical oracle. Keep the model dimensions fixed while varying workloads. Then move to real 8B and 32B checkpoints; subsequent chapters use those models. Compare each block with a simple mathematical oracle. Use a rectangular attention case and unequal query/KV head counts.
+Use the first two real Qwen3-8B layers, with its embeddings, final norm, and vocabulary head, as the single course Qwen3 tiny configuration `(L,D,I,Hq,Hkv,R,V)=(2,4096,12288,32,8,128,151936)` for Chapter 1 correctness and DGX Spark timing in FP32. CPU execution is an optional untimed mathematical oracle. Keep the model dimensions fixed while varying workloads. Then move to real 8B and 32B checkpoints; subsequent chapters use those models. Compare each block with a simple mathematical oracle. Use a rectangular attention case and unequal query/KV head counts.
 
 Then implement checkpoint loading. Produce a table mapping every checkpoint tensor name and shape to your module. Assert that required weights are consumed and shapes match. Avoid silently initializing an unmapped Q/K norm.
 
@@ -888,7 +921,7 @@ These are mathematical and systems exercises. Random-weight modules do not estab
 
 Organize the student engine repository by mechanism and experiment. The following
 are suggested implementation paths, not a claim that a complete engine is supplied.
-This course directory now provides the eight teaching chapters under `chapters/`
+This course directory now provides a conceptual Chapter 0 and eight project chapters under `chapters/`
 and common setup, protocol, and report materials under `shared/`; keep your evolving
 engine and experiment artifacts alongside them or in your existing engine repository.
 
@@ -907,7 +940,7 @@ engine and experiment artifacts alongside them or in your existing engine reposi
 
 Do not commit large weights or private data. Keep source attribution for reused Mini-SGLang or other code and make your changes identifiable.
 
-### Chapter template
+### Project chapter template (Chapters 1–8)
 
 1. **Question and scope.** Specify model, workload, hardware, and the decision being investigated.
 2. **Mechanism.** Explain the relevant computation or state transition, with tensor shapes.
@@ -926,6 +959,7 @@ Label plots as measured, modeled, or illustrative. A useful chapter usually need
 
 | Chapter | Working title | Main figure |
 |---|---|---|
+| 0 | From text to a serving system (conceptual reading) | Transformer and request-flow diagrams; no project |
 | 1 | Reconstructing Qwen3 | Predicted versus measured memory by context |
 | 2 | An inference scheduler from first principles | Goodput and token latency under mixed arrivals |
 | 3 | Predicting inference latency | Predicted versus observed prefill/decode times |

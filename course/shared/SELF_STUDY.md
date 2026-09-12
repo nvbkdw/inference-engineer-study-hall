@@ -1,16 +1,17 @@
 # Independent study guide
 
 The course is designed for both a 16-week class and a student working alone.
-Each chapter has a complete entry experiment, followed by a full project that
+Begin with [Chapter 0](../chapters/00_introduction/README.md), a conceptual introduction with no installation, code, projects, or submissions. Its readings connect transformer math to the complete inference system.
+Each project chapter (1–8) has a complete entry experiment, followed by a full project that
 develops the same evolving Qwen inference engine. You can start an entry experiment
 without completing earlier implementations; the full semester follows chapters
 in order. Read the relevant background before executing the sample.
 
-## Choose your starting point
+## Continue to a project
 
-| Project | Standalone tutorial | Measurable goals | Entry experiment scope |
+| Project | Entry lab | Measurable goals | Entry experiment scope |
 |---|---|---|---|
-| P1 | [Cache correctness and memory](../chapters/01_reconstruct_qwen3/standalone.md) | [P1 goals](../chapters/01_reconstruct_qwen3/assessment.md) | Qwen3 tiny, shared with Chapter 1 correctness: FP32 CUDA decode time and logical cache bytes on Spark |
+| P1 | [Cache correctness and memory](../chapters/01_reconstruct_qwen3/code/lab.ipynb) | [P1 goals](../chapters/01_reconstruct_qwen3/code/lab.ipynb) | Qwen3 tiny, shared with Chapter 1 correctness: FP32 CUDA decode time and logical cache bytes on Spark |
 | P2 | [Bounded scheduling](../chapters/02_runtime_and_kv/standalone.md) | [P2 goals](../chapters/02_runtime_and_kv/assessment.md) | Real allocator logic with explicitly simulated service times |
 | P3 | [Held-out prediction](../chapters/03_performance_model/standalone.md) | [P3 goals](../chapters/03_performance_model/assessment.md) | Actual Spark BF16 GEMM calibration, frozen predictions, six held-out shapes |
 | P4 | [Tiled attention](../chapters/04_kernels/standalone.md) | [P4 goals](../chapters/04_kernels/assessment.md) | Actual Spark CUDA workload time and modeled score storage |
@@ -20,7 +21,7 @@ in order. Read the relevant background before executing the sample.
 | P8 | [Handoff costs](../chapters/08_prefill_decode/standalone.md) | [P8 goals](../chapters/08_prefill_decode/assessment.md) | Actual two-GPU NCCL payload plus acknowledgment |
 
 Follow [SETUP.md](SETUP.md) once. The measured entry experiments use DGX Spark, CUDA-enabled PyTorch, NumPy,
-and Matplotlib. P1/P3/P4/P6 need one Spark and no checkpoint download.
+and Matplotlib. P1/P3/P4/P6 need one Spark. P1 first downloads the real weights used by its two-layer practice checkpoint; P3/P4/P6 component samples need no checkpoint download.
 P2/P5 are explicitly untimed model exercises alongside the full Spark labs.
 P7/P8 require two connected Sparks or the syllabus's two-GPU rental. Two local
 CPU/Gloo ranks on one Spark are not a measurement substitute.
@@ -28,9 +29,10 @@ The full projects retain the syllabus's Spark/connected-GPU resources and Qwen3
 8B/32B validation. A machine without those resources can complete optional correctness/modeling work
 and derivations, but must mark the corresponding full GPU milestones unmeasured.
 
-For the first real-model baseline, use the [P1 checkpoint workflow](../chapters/01_reconstruct_qwen3/checkpoint_workflow.md).
-It starts with an offline, randomly initialized sharded Qwen3 fixture, then gives
-the same audit/load/save/compare command sequence for local 8B/32B snapshots.
+For the first real-model baseline, use [P1 Lab 1](../chapters/01_reconstruct_qwen3/code/lab.ipynb)
+to extract and verify the first two layers of pinned real Qwen3-8B weights. Continue
+with [P1 Lab 2](../chapters/01_reconstruct_qwen3/code/lab2.ipynb) to download full
+8B/32B checkpoints, inspect metadata and weights, and generate logits with custom blocks.
 
 ## A repeatable study session
 
@@ -73,7 +75,7 @@ it for a real server.
 ## What counts as completion?
 
 The entry note demonstrates that you can run and interpret the mechanism. The full
-chapter requires its assessment table's real-model, hardware, correctness, and
+chapter requires its checklist's real-model, hardware, correctness, and
 measurement evidence. The final course outcome is the complete engine experiment
 portfolio and a defensible design under a declared workload/hardware/SLO budget.
 

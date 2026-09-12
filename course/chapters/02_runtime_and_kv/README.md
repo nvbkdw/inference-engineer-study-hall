@@ -45,4 +45,4 @@ illustrative outputs must not be reported as Qwen serving benchmarks.
 
 ## Navigation
 
-[Previous chapter](../01_reconstruct_qwen3/README.md) · [Course home](../../README.md) · [Next chapter](../03_performance_model/README.md)
+[Previous chapter](../01_reconstruct_qwen3/background.md) · [Course home](../../README.md) · [Next chapter](../03_performance_model/README.md)

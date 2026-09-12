@@ -31,7 +31,16 @@ class StandaloneExperiments(unittest.TestCase):
                     command=[sys.executable]
                     if int(number)>=7:
                         command+=['-m','torch.distributed.run','--standalone','--nproc_per_node=2']
-                    command += [str(chapter/'code/experiment.py'),'--out',str(out),'--repeats','3']
+                    if number == '01':
+                        command += ['-c',
+                                    'import sys; sys.path.insert(0, sys.argv[1]); '
+                                    'from notebook_utils import run_cache_experiment, load_notebook_implementation; '
+                                    'm=load_notebook_implementation(); '
+                                    'run_cache_experiment(sys.argv[2], model_factory=m.TinyQwen3, '
+                                    'name_map_factory=m.model_weight_name_mapping, repeats=3)',
+                                    str(chapter/'code'),str(out)]
+                    else:
+                        command += [str(chapter/'code/experiment.py'),'--out',str(out),'--repeats','3']
                     if int(number)>=7:
                         command+=['--backend','nccl']
                     result=subprocess.run(command,cwd=ROOT,capture_output=True,text=True,timeout=180)
@@ -79,7 +88,12 @@ class StandaloneExperiments(unittest.TestCase):
 
     @unittest.skipUnless(CUDA,'DGX Spark/CUDA GPU required; no CPU timing substitute')
     def test_spark_measurement_artifacts(self):
-        self.run_chapters(['01','03','04','06'])
+        self.run_chapters(['03','04','06'])
+
+    @unittest.skipUnless(CUDA and (ROOT/'models/qwen3-tiny/provenance.json').is_file(),
+                         'Spark CUDA and prepared real two-layer weights required')
+    def test_qwen_tiny_measurement_artifacts(self):
+        self.run_chapters(['01'])
 
     @unittest.skipUnless(TWO_GPU,'two physical GPUs required for same-host NCCL test; use documented two-Spark launch separately')
     def test_nccl_measurement_artifacts(self):

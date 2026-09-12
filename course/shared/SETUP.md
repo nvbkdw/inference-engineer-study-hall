@@ -8,7 +8,7 @@ models, which must be distinguished from measured GPU results.
 
 ## Use a Spark-compatible CUDA environment
 
-All Python dependencies for the supplied scripts, plots, checkpoint tools, and
+All Python dependencies for the supplied notebooks, scripts, plots, checkpoint tools, and
 tests are declared in [pyproject.toml](../pyproject.toml). From `course/`, create
 a dedicated Spark environment with [uv](https://docs.astral.sh/uv/getting-started/installation/):
 
@@ -62,6 +62,19 @@ The experiment preflight checks CUDA availability and launches an actual GPU
 operation. It records the real GPU name, compute capability, runtime/build,
 visible device count, and reported memory. It does not relabel an H100 as Spark.
 The measured exercises accept `--device cuda:0` and **reject CPU fallback**.
+
+## Open the Chapter 1 notebooks
+
+JupyterLab and the Python kernel are included in the course dependencies. With
+the Spark environment active, launch from `course/`:
+
+```bash
+python -m jupyterlab chapters/01_reconstruct_qwen3/code/lab.ipynb
+```
+
+Select the kernel from that CUDA environment. Work through Lab 1, then open
+`lab2.ipynb` in the same directory for full 8B/32B checkpoints. Utility files stay
+alongside the notebooks; keep the checkout structure intact so imports resolve.
 
 ## First measured experiment
 
@@ -157,7 +170,8 @@ run on GB10.
 
 ## Model identity and full projects
 
-Use the [P1 checkpoint workflow](../chapters/01_reconstruct_qwen3/checkpoint_workflow.md)
+Use [P1 Lab 1](../chapters/01_reconstruct_qwen3/code/lab.ipynb) and
+[Lab 2 for full models](../chapters/01_reconstruct_qwen3/code/lab2.ipynb)
 to audit local safetensors and compare selected full-vocabulary logits. Install
 the dependencies from `pyproject.toml`, which include Transformers, safetensors,
 Accelerate, and Hugging Face Hub (including the `hf` command).
