@@ -13,7 +13,7 @@ tokens`, which can differ from history length by one pending token.
 ## 2. Implement a physical block pool (5 hours)
 
 ```bash
-python chapters/02_runtime_and_kv/code/lab.py
+python chapters/03_runtime_and_kv/code/lab.py
 ```
 
 Inspect `Pool.append`, `share_prefix`, and `release`. The sample manages ownership

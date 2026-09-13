@@ -6,7 +6,7 @@ for this chapter; the full two-week project is in [tutorial.md](tutorial.md).
 ## 1. Prepare and predict
 
 This script is an **untimed model exercise**, not CPU performance measurement.
-Run the [Spark GEMM/calibration experiment](../03_performance_model/standalone.md)
+Run the [Spark GEMM/calibration experiment](../02_performance_model/code/lab.ipynb)
 to establish a measured GPU starting point. Use the full tutorial for actual
 Spark serving/speculation timing; keep invented service costs labeled.
 
@@ -24,8 +24,8 @@ assumptions and numerical predictions before the corresponding measurements.
 ## 2. Check the mechanism and run
 
 ```bash
-OMP_NUM_THREADS=1 python chapters/02_runtime_and_kv/code/lab.py
-python chapters/02_runtime_and_kv/code/experiment.py --out results/p02-first --repeats 3
+OMP_NUM_THREADS=1 python chapters/03_runtime_and_kv/code/lab.py
+python chapters/03_runtime_and_kv/code/experiment.py --out results/p02-first --repeats 3
 ```
 
 Trace `simulate`: admission reserves worst-case future page capacity to avoid deadlock, while `Pool.append` populates only scheduled tokens. `select_work` prioritizes one token per decoding request. Every policy replays the same request arrivals within a repeat.

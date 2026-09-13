@@ -24,17 +24,17 @@ The plan assumes **15–18 focused hours per week**, familiarity with Python/PyT
 | --------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
 | **Week 1 opening** | [0. Introduction](chapters/00_introduction/README.md) | A conceptual map from tokens and transformer operators to distributed serving; reading only |
 | **1–2**   | [1. Reconstruct Qwen3](chapters/01_reconstruct_qwen3/background.md) | Numerical validation on both models; memory accounting |
-| **3–4**   | [2. Build scheduling and bounded KV memory](chapters/02_runtime_and_kv/README.md) | Explain latency, throughput, and memory tradeoffs |
-| **5–6**   | [3. Predict inference performance](chapters/03_performance_model/README.md) | Predict prefill/decode time on workloads withheld from calibration |
+| **3–4**   | [2. Model inference performance](chapters/02_performance_model/background.md) | Derive Qwen3 FLOPs, measure prefill/decode, and interpret rooflines and MFU |
+| **5–6**   | [3. Build scheduling and bounded KV memory](chapters/03_runtime_and_kv/README.md) | Explain latency, throughput, and memory tradeoffs |
 | **7–8**   | [4. Optimize GEMM and attention](chapters/04_kernels/README.md) | Explain kernel performance and its effect on model execution |
 | **9–10**  | [5. Speculate with 8B → 32B](chapters/05_speculative_decoding/README.md) | Correct verification/rollback and a measured break-even analysis |
 | **11–12** | [6. Quantize and evaluate quality](chapters/06_quantization/README.md) | Compare memory, latency, goodput, and interaction with speculation |
 | **13–14** | [7. Implement TP and compare replicas](chapters/07_tensor_parallelism/README.md) | Choose how two GPUs should serve a fixed workload |
 | **15–16** | [8. Transfer KV and evaluate P/D](chapters/08_prefill_decode/README.md) | Evaluate disaggregation and defend a final serving design |
 
-Chapter 1 has one [theory and reading guide](chapters/01_reconstruct_qwen3/background.md) and two interactive notebooks: [Lab 1, reconstruct and measure tiny](chapters/01_reconstruct_qwen3/code/lab.ipynb), then [Lab 2, run full 8B/32B weights](chapters/01_reconstruct_qwen3/code/lab2.ipynb). Instructions and acceptance goals live in the notebooks; reusable utilities remain in `code/`. Chapters 2–8 have separate overview, background, standalone lab, full tutorial, assessment, and reference pages. The projects share model conventions and an experiment protocol. Chapter 0 contains only conceptual readings, equations, diagrams, and references.
+Chapter 1 has one [theory and reading guide](chapters/01_reconstruct_qwen3/background.md) and two interactive notebooks: [Lab 1, reconstruct and measure tiny](chapters/01_reconstruct_qwen3/code/lab.ipynb), then [Lab 2, run full 8B/32B weights](chapters/01_reconstruct_qwen3/code/lab2.ipynb). Instructions and acceptance goals live in the notebooks; reusable utilities remain in `code/`. Chapter 2 has one [theory guide](chapters/02_performance_model/background.md) and one [interactive performance lab](chapters/02_performance_model/code/lab.ipynb), consolidating hardware calibration, analytical Qwen3 FLOPs, real 8B/32B timings, MFU, and roofline plots. Chapters 3–8 retain separate overview, background, standalone lab, full tutorial, assessment, and reference pages. The projects share model conventions and an experiment protocol. Chapter 0 contains only conceptual readings, equations, diagrams, and references.
 
-**Studying alone:** read Chapter 0 first, then Chapter 1's background and Lab 1. Later chapters begin with their standalone labs. Every project saves assumptions/predictions, raw CSV data, a summary, and SVG/PNG figures. These entry experiments need no previous engine implementation. Measured experiments run on DGX Spark with CUDA events; P2/P5 retain clearly labeled untimed models. P7/P8 require two physical GPUs. Continue to the full project and its checklist for real Qwen/GPU validation. The [independent study guide](shared/SELF_STUDY.md) lists all eight entry points and explains which results are measured or simulated.
+**Studying alone:** read Chapter 0 first, then Chapter 1's background and Lab 1. Continue with Chapter 2’s interactive notebook; Chapters 3–8 begin with their standalone labs. Every project saves assumptions/predictions, raw CSV data, a summary, and SVG/PNG figures. These entry experiments need no previous engine implementation. Measured experiments run on DGX Spark with CUDA events; the scheduling and speculative-decoding entry labs retain clearly labeled untimed models. P7/P8 require two physical GPUs. Continue to the full project and its checklist for real Qwen/GPU validation. The [independent study guide](shared/SELF_STUDY.md) lists all eight entry points and explains which results are measured or simulated.
 
 The code provides small executable references for core mechanisms. Students extend these into the full engine, CuTe kernels, real quantization path, and serving experiments described in the tutorials. CPU checks and illustrative calculations are labeled separately from required GPU and real-checkpoint validation.
 
@@ -43,9 +43,11 @@ The [project dependency manifest](pyproject.toml) includes all supplied-script a
 After activating a Spark-compatible CUDA environment using [setup](shared/SETUP.md), run the first measurement and optional correctness checks:
 
 ```bash
-python chapters/03_performance_model/code/experiment.py --device cuda:0 --out results/spark-first --repeats 3
+jupyter lab chapters/02_performance_model/code/lab.ipynb
 python -m unittest discover -s tests -v
 ```
+
+In the performance notebook, set `RUN_GPU = True` for calibration and `RUN_MODELS = True` for full checkpoint benchmarks. The default analytical mode performs no model downloads.
 
 P1 model and checkpoint tests require the prepared two-layer checkpoint; tests skip that scope when its weights are absent. Tensor checks require PyTorch; Spark measurement checks also need CUDA and Matplotlib. The optional checkpoint workflow tests use Transformers, safetensors, and Accelerate. Missing dependency groups are explicitly skipped. Chapters 7 and 8 measure NCCL on two connected Sparks or two physical rental GPUs. CPU/Gloo is optional correctness-only work. See [validation notes](shared/VALIDATION.md) for what was actually checked while preparing this material.
 

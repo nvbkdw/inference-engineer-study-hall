@@ -12,8 +12,8 @@ in order. Read the relevant background before executing the sample.
 | Project | Entry lab | Measurable goals | Entry experiment scope |
 |---|---|---|---|
 | P1 | [Cache correctness and memory](../chapters/01_reconstruct_qwen3/code/lab.ipynb) | [P1 goals](../chapters/01_reconstruct_qwen3/code/lab.ipynb) | Qwen3 tiny, shared with Chapter 1 correctness: FP32 CUDA decode time and logical cache bytes on Spark |
-| P2 | [Bounded scheduling](../chapters/02_runtime_and_kv/standalone.md) | [P2 goals](../chapters/02_runtime_and_kv/assessment.md) | Real allocator logic with explicitly simulated service times |
-| P3 | [Held-out prediction](../chapters/03_performance_model/standalone.md) | [P3 goals](../chapters/03_performance_model/assessment.md) | Actual Spark BF16 GEMM calibration, frozen predictions, six held-out shapes |
+| P2 | [Bounded scheduling](../chapters/03_runtime_and_kv/standalone.md) | [P2 goals](../chapters/03_runtime_and_kv/assessment.md) | Real allocator logic with explicitly simulated service times |
+| P3 | [Held-out prediction](../chapters/02_performance_model/code/lab.ipynb) | [P3 goals](../chapters/02_performance_model/code/lab.ipynb) | Interactive roofline, GEMM calibration, frozen predictions, real Qwen3 prefill/decode, MFU and plots |
 | P4 | [Tiled attention](../chapters/04_kernels/standalone.md) | [P4 goals](../chapters/04_kernels/assessment.md) | Actual Spark CUDA workload time and modeled score storage |
 | P5 | [Speculative sampling](../chapters/05_speculative_decoding/standalone.md) | [P5 goals](../chapters/05_speculative_decoding/assessment.md) | Finite-vocabulary distributions and an invented timing model |
 | P6 | [Quantization tradeoffs](../chapters/06_quantization/standalone.md) | [P6 goals](../chapters/06_quantization/assessment.md) | Actual random-layer error/storage and Spark CUDA reconstruction cost |
@@ -21,7 +21,7 @@ in order. Read the relevant background before executing the sample.
 | P8 | [Handoff costs](../chapters/08_prefill_decode/standalone.md) | [P8 goals](../chapters/08_prefill_decode/assessment.md) | Actual two-GPU NCCL payload plus acknowledgment |
 
 Follow [SETUP.md](SETUP.md) once. The measured entry experiments use DGX Spark, CUDA-enabled PyTorch, NumPy,
-and Matplotlib. P1/P3/P4/P6 need one Spark. P1 first downloads the real weights used by its two-layer practice checkpoint; P3/P4/P6 component samples need no checkpoint download.
+and Matplotlib. P1/P3/P4/P6 need one Spark. P1 first downloads the real weights used by its two-layer practice checkpoint. The performance notebook’s calibration needs no weights; its full-model sections use pinned 8B/32B checkpoints. P4/P6 component samples need no checkpoint download.
 P2/P5 are explicitly untimed model exercises alongside the full Spark labs.
 P7/P8 require two connected Sparks or the syllabus's two-GPU rental. Two local
 CPU/Gloo ranks on one Spark are not a measurement substitute.

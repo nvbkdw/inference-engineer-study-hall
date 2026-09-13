@@ -23,15 +23,7 @@ def module(chapter):
 
 class StandardLibraryLabs(unittest.TestCase):
     def test_pool_ownership_and_exhaustion(self):
-        module('02').check()
-
-    def test_roofline_units_and_sequential_costs(self):
-        m = module('03')
-        self.assertAlmostEqual(m.roofline(2e12, 1e9, 2, 100, 0), 1000)
-        self.assertAlmostEqual(m.roofline(0, 1e9, 2, 100, 5), 10.005)
-        rows = m.predict('8b', 1, 2048, 'decode', 50, 200, 5)
-        self.assertEqual(sum(r[1] for r in rows), 289)
-        self.assertTrue(all(r[-1] > 0 for r in rows))
+        module('03').check()
 
     def test_exact_speculative_distribution(self):
         module('05').check()

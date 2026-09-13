@@ -81,10 +81,10 @@ alongside the notebooks; keep the checkout structure intact so imports resolve.
 Start with a model-derived BF16 GEMM and a bandwidth calibration on Spark:
 
 ```bash
-python chapters/03_performance_model/code/experiment.py --device cuda:0 --out results/spark-first-roofline --repeats 3
+jupyter lab chapters/02_performance_model/code/lab.ipynb
 ```
 
-This measures Qwen3-8B Q-projection dimensions, K=N=4096, with no checkpoint
+Set `RUN_GPU = True` in the notebook to measure Qwen3-8B Q-projection dimensions, K=N=4096, with no checkpoint
 download. Calibration precedes six held-out M values. The copy experiment uses
 128 MiB buffers; inspect residency and effective traffic before treating the rate
 as a DRAM limit. Open `manifest.json`, `prediction.json`, `results.csv`, and

@@ -16,7 +16,7 @@ compiler target in the manifest. A Hopper TMA/warp-group example requires the
 corresponding GPU; do not assume it runs on Spark.
 
 Benchmark M=1,4,16,128,512 with model-derived K,N against the backend used in P3.
-Use its [GEMM timing sample](../03_performance_model/code/benchmark_gemm.py) as the
+Use its [GEMM timing sample](../02_performance_model/code/lab.ipynb) as the
 event-timing pattern. Choose one change—BM/BN/BK, pipeline stages, or layout—and
 predict register/shared-memory demand and which shapes benefit. Compare numerical
 results, latency, and a few counters before/after. Stop after one explained change.

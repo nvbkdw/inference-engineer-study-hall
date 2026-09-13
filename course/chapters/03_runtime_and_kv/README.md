@@ -1,4 +1,4 @@
-# Chapter 2: An inference scheduler from first principles
+# Chapter 3: An inference scheduler from first principles
 
 **P2 · Weeks 3–4 · 30–36 hours**  
 **Laboratory:** DGX Spark serving; untimed allocator/simulation exercise
@@ -45,4 +45,4 @@ illustrative outputs must not be reported as Qwen serving benchmarks.
 
 ## Navigation
 
-[Previous chapter](../01_reconstruct_qwen3/background.md) · [Course home](../../README.md) · [Next chapter](../03_performance_model/README.md)
+[Previous chapter](../02_performance_model/background.md) · [Course home](../../README.md) · [Next chapter](../04_kernels/README.md)

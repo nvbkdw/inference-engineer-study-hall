@@ -45,4 +45,4 @@ illustrative outputs must not be reported as Qwen serving benchmarks.
 
 ## Navigation
 
-[Previous chapter](../03_performance_model/README.md) · [Course home](../../README.md) · [Next chapter](../05_speculative_decoding/README.md)
+[Previous chapter](../03_runtime_and_kv/README.md) · [Course home](../../README.md) · [Next chapter](../05_speculative_decoding/README.md)

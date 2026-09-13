@@ -686,4 +686,4 @@ and [safetensors tensor/header API](https://huggingface.co/docs/safetensors/main
 Trace how a checkpoint tensor becomes a linear operator, and why auditing shapes
 before allocation can catch a broken mapping without loading the model.
 
-[Open the practical lab](code/lab.ipynb) · [Previous: Introduction](../00_introduction/README.md) · [Course home](../../README.md) · [Next: Runtime and KV memory](../02_runtime_and_kv/README.md)
+[Open the practical lab](code/lab.ipynb) · [Previous: Introduction](../00_introduction/README.md) · [Course home](../../README.md) · [Next: Performance modeling](../02_performance_model/background.md)

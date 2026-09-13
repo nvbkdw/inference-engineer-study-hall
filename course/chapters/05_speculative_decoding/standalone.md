@@ -6,7 +6,7 @@ for this chapter; the full two-week project is in [tutorial.md](tutorial.md).
 ## 1. Prepare and predict
 
 This script is an **untimed model exercise**, not CPU performance measurement.
-Run the [Spark GEMM/calibration experiment](../03_performance_model/standalone.md)
+Run the [Spark GEMM/calibration experiment](../02_performance_model/code/lab.ipynb)
 to establish a measured GPU starting point. Use the full tutorial for actual
 Spark serving/speculation timing; keep invented service costs labeled.
 
