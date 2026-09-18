@@ -43,7 +43,7 @@ published checkpoints.
 | `I` | FFN intermediate width; `intermediate_size` | 12,288 | 12,288 | 25,600 |
 | `Hq` | Query heads; `num_attention_heads` | 32 | 32 | 64 |
 | `Hkv` | Key heads and value heads; `num_key_value_heads` | 8 | 8 | 8 |
-| `R` | Channels per head; explicit `head_dim` | 128 | 128 | 128 |
+| `R` | Head dimension; explicit `head_dim` | 128 | 128 | 128 |
 | `V` | Vocabulary size; `vocab_size` | 151,936 | 151,936 | 151,936 |
 | `G = Hq/Hkv` | Query heads sharing each KV head (GQA group size) | 4 | 4 | 8 |
 | `Hq*R` | Q projection width / concatenated attention-output width | 4,096 | 4,096 | 8,192 |
@@ -687,3 +687,8 @@ Trace how a checkpoint tensor becomes a linear operator, and why auditing shapes
 before allocation can catch a broken mapping without loading the model.
 
 [Open the practical lab](code/lab.ipynb) · [Previous: Introduction](../00_introduction/README.md) · [Course home](../../README.md) · [Next: Performance modeling](../02_performance_model/background.md)
+
+
+## Questions:
+1. where and why Qwen3 use RMSNorm?
+2. where and why use RoPE?

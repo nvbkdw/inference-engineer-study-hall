@@ -134,17 +134,43 @@ class PerformanceNotebook(unittest.TestCase):
         ledger = self.m.decoder_layer_flops(c, 1, 4)
         attention = c.layers * (ledger['qk'] + ledger['av'])
         self.assertEqual(sum(counts), self.m.model_work(c, 1, 4)['flops']-attention)
-        self.assertLess(self.m.check_cached_logits(model, 'cpu'), 1e-5)
         # Exercise the same shard-at-a-time loader used by the full GPU notebook.
         import tempfile
         with tempfile.TemporaryDirectory() as directory:
             model.save_pretrained(directory, max_shard_size='30KB')
-            loaded = self.m.load_resident_model(directory, config, 'cpu', 'float32', 'sdpa')
+            loaded = self.m.load_resident_model(directory, 'cpu', 'float32', 'eager')
+            reference = self.m.reference_model_module()
+            self.assertIsInstance(loaded, reference.TinyQwen3)
+            mapping = reference.model_weight_name_mapping(loaded.c)
             for name, parameter in model.named_parameters():
-                torch.testing.assert_close(dict(loaded.named_parameters())[name], parameter, rtol=0, atol=0)
+                torch.testing.assert_close(dict(loaded.named_parameters())[mapping[name]], parameter, rtol=0, atol=0)
+            hooks = [module.register_forward_hook(count_linear) for module in loaded.modules()
+                     if isinstance(module, torch.nn.Linear)]
+            counts.clear()
             with torch.inference_mode():
-                restored = loaded(input_ids=ids, use_cache=False, logits_to_keep=1).logits
-            torch.testing.assert_close(restored, full, rtol=0, atol=0)
+                restored, _ = loaded(ids, decode=True)
+            for hook in hooks:
+                hook.remove()
+            self.assertEqual(sum(counts), self.m.model_work(c, 1, 4)['flops']-attention)
+            torch.testing.assert_close(restored, full, rtol=1e-5, atol=1e-6)
+            self.assertLess(self.m.check_cached_logits(loaded, 'cpu'), 1e-5)
+            self.assertIn('chapters/01_reconstruct_qwen3/code/lab.ipynb', reference.source_hashes())
+            with self.assertRaisesRegex(ValueError, 'only eager'):
+                self.m.load_resident_model(directory, 'cpu', 'float32', 'sdpa')
+
+            # Batched chunk append must preserve the prefix and use absolute positions.
+            ids = torch.tensor([[11, 25, 76, 93], [5, 9, 12, 42]])
+            with torch.inference_mode():
+                expected = model(input_ids=ids, use_cache=False).logits
+                _, prefix = loaded(ids[:, :2])
+                saved = [(k.clone(), v.clone()) for k, v in prefix]
+                actual, cache = loaded(ids[:, 2:], prefix)
+            torch.testing.assert_close(actual, expected[:, 2:], rtol=1e-5, atol=1e-6)
+            for (k, v), (old_k, old_v), (saved_k, saved_v) in zip(cache, prefix, saved):
+                self.assertEqual(k.shape, (2, 2, 4, 16))
+                self.assertEqual(v.shape, k.shape)
+                torch.testing.assert_close(old_k, saved_k, rtol=0, atol=0)
+                torch.testing.assert_close(old_v, saved_v, rtol=0, atol=0)
 
 
 if __name__ == '__main__':
