@@ -31,7 +31,7 @@ sharing the sole Spark GPU cannot establish this GPU transfer result.
 
 ## 3. Move actual model state (7 hours)
 
-Connect P1/P2 prefill output to export/import functions. Export populated K/V,
+Connect P1/P4 prefill output to export/import functions. Export populated K/V,
 absolute positions, history including the pending token, model/format identity,
 and the declared sampler state. For paged storage, pack logical populated blocks
 in a known order, allocate destination blocks, and rebuild its private page table.
@@ -69,7 +69,7 @@ bytes/s at each offered arrival rate to expose a saturated transfer stage.
 Run two colocated TP=1 replicas, one P plus one D worker, and the best feasible
 colocated TP arrangement from P7. Match models, precision, prompt traces, SLOs,
 total GPUs, and useful output. Use W1–W4 plus the same fixed W1/W3 mixture used in
-P2. Start at low load and increase identical offered rates for each arrangement.
+P4. Start at low load and increase identical offered rates for each arrangement.
 
 Log queue times at both stages, stage utilization, transfer bytes, TTFT, first-to-
 second-token gap, within-request p95 ITL, completion latency, failures, and goodput.

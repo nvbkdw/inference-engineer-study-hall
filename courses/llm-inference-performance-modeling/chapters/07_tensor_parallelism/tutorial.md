@@ -54,7 +54,7 @@ algorithm changes. A bandwidth-only fit to multi-megabyte messages will usually
 miss small reduction cost. Instrument the engine's collective count and payloads;
 explain deviations from two reductions per layer.
 
-Use P3 local compute/memory terms to predict TP=2 latency before measuring full
+Use P2 local compute/memory terms to predict TP=2 latency before measuring full
 distributed workloads. Include reductions on the actual critical path and
 replicated operations. Save those predictions.
 

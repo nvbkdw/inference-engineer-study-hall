@@ -24,8 +24,8 @@ assumptions and numerical predictions before the corresponding measurements.
 ## 2. Check the mechanism and run
 
 ```bash
-OMP_NUM_THREADS=1 python chapters/03_runtime_and_kv/code/lab.py
-python chapters/03_runtime_and_kv/code/experiment.py --out results/p02-first --repeats 3
+OMP_NUM_THREADS=1 python chapters/04_runtime_and_kv/code/lab.py
+python chapters/04_runtime_and_kv/code/experiment.py --out results/p04-first --repeats 3
 ```
 
 Trace `simulate`: admission reserves worst-case future page capacity to avoid deadlock, while `Pool.append` populates only scheduled tokens. `select_work` prioritizes one token per decoding request. Every policy replays the same request arrivals within a repeat.
@@ -62,7 +62,7 @@ project's 1,200–2,000 word research memo.
 
 ## 6. Continue to the full project
 
-Replace the invented service model with measured prefill/decode curves, then implement the full P2 scheduler, cancellation, exact-prefix reuse, and efficient paged adapter in [tutorial.md](tutorial.md).
+Replace the invented service model with measured prefill/decode curves, then implement the full P4 scheduler, cancellation, exact-prefix reuse, and efficient paged adapter in [tutorial.md](tutorial.md).
 
 Use [assessment.md](assessment.md) to distinguish completed entry goals from
 remaining full-project goals. A passing reference exercise does not establish real-model

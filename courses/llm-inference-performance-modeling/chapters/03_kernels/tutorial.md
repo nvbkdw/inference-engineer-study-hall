@@ -2,10 +2,19 @@
 
 ## 1. Select a measured target (2 hours)
 
-Use P3's profile to choose a Qwen GEMM shape and an attention workload. Record the
-baseline operation's fraction of total model time. Predict an Amdahl ceiling even
-for an infinitely fast replacement. This prevents confusing local speed with the
-decision the serving workload needs.
+Use the prediction–measurement comparison and separate profile from Chapter 2
+to choose a Qwen GEMM shape and an attention workload. Keep the theoretical bound,
+calibrated estimate, and observed latency distinct. Explain which evidence links
+the gap to data movement, tile utilization, parallelism, or launch overhead using
+[the gap analysis](background.md#from-chapter-2s-model-to-an-optimization-hypothesis).
+Record the baseline operation's fraction of total model time and predict an
+Amdahl ceiling even for an infinitely fast replacement. Freeze a prediction for
+one specific change, including adapter costs, before measuring it.
+
+Reuse the model exported by [Chapter 2's model module](../02_performance_model/code/model.py)
+and its benchmark fixtures. Keep reusable kernel and adapter code under this
+chapter's `code/` directory so Chapter 4 can import it from a fresh process.
+The workflow is prediction → implementation → correctness → measurement → explanation.
 
 ## 2. Bound the toolchain and GEMM change (7 hours)
 
@@ -15,7 +24,7 @@ porting your existing GEMM. Record the example path, commit, launch command, and
 compiler target in the manifest. A Hopper TMA/warp-group example requires the
 corresponding GPU; do not assume it runs on Spark.
 
-Benchmark M=1,4,16,128,512 with model-derived K,N against the backend used in P3.
+Benchmark M=1,4,16,128,512 with model-derived K,N against the backend used in P2.
 Use its [GEMM timing sample](../02_performance_model/code/lab.ipynb) as the
 event-timing pattern. Choose one change—BM/BN/BK, pipeline stages, or layout—and
 predict register/shared-memory demand and which shapes benefit. Compare numerical
@@ -24,7 +33,7 @@ results, latency, and a few counters before/after. Stop after one explained chan
 ## 3. Derive online attention on CPU (4 hours)
 
 ```bash
-python chapters/04_kernels/code/lab.py
+python chapters/03_kernels/code/lab.py
 ```
 
 `online_attention` computes tiled decode and causal prefill without a full S-by-S
@@ -39,14 +48,14 @@ case that shows why that implementation is wrong.
 
 ## 4. Implement the CuTe decode path (8 hours)
 
-Create `engine/kernels/gqa_decode.py` using the pinned official example's host/JIT
+Create `code/gqa_decode.py` using the pinned official example's host/JIT
 structure. The implementation is a required student deliverable, not included in
 the PyTorch oracle. Implement in this order:
 
 1. A host adapter validates dtype, R=128, head divisibility, strides, positive
    lengths, and output shape. Unsupported shapes dispatch to the reference backend.
 2. Assign one program to `(request,query_head)` and derive its KV-head index.
-3. Load Q once. For each key tile, load K/V using the runtime tensor layout.
+3. Load Q once. For each key tile, load K/V using the declared contiguous cache layout.
 4. Predicate loads for `key_index < length`; treat invalid scores as -infinity.
 5. Reduce QK across head coordinates in FP32 and apply the `1/sqrt(128)` scale.
 6. Update m, ell, and u using the background equations; normalize and store once.
@@ -77,10 +86,20 @@ uses CUDA events and records the actual GPU identity. CPU `lab.py` checks
 are optional correctness preparation; they supply no timing baseline.
 The remaining steps below extend the reference workload to the full project.
 
-Replace only the attention interface in the P2 runtime. If pages must be gathered
-into contiguous KV, time that gather separately and include it in integrated
+Extend the imported Chapter 1/2 model with an attention backend adapter; keep its
+weights, projections, RoPE, normalization, and cache semantics shared. The caller
+owns the cache. For one decode token, pass Q `[B,Hq,128]`, K/V
+`[B,Hkv,Smax,128]`, and valid lengths **after** appending the token (`S = p+1`
+for prior length `p`). Return `[B,Hq,128]` on the same device and in the input
+dtype without mutating K/V. Use the declared BF16 kernel path and retain the
+reference for prefill or unsupported shapes. The existing model handles equal
+lengths; test ragged batches directly at the kernel boundary.
+
+Time layout conversions and dispatch separately and include them in integrated
 latency. Compare matched masks, precision, head grouping, graph settings, and
-cache condition with the library baseline. Warm up every compiled shape.
+cache condition with the reference and explicitly labeled library baselines.
+Warm up every compiled shape. Chapter 4 will import this adapter, add page
+ownership, and account for any gather needed by the contiguous kernel.
 
 Report kernel speedup, adapter-inclusive speedup, and full-model speedup on W1/W2
 and one long-context case. Predict using baseline f and measured s, then explain

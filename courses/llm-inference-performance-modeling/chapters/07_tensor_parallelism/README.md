@@ -17,7 +17,7 @@ For an independent first experiment, start with the [standalone lab](standalone.
 It needs no previous engine implementation and produces saved data and figures.
 Use the [measurable goals](assessment.md) to track entry and full-project completion.
 
-P1 model, P3 model/calibration, basic process communication. Follow the [shared setup](../../shared/SETUP.md) and
+P1 model, P2 model/calibration, basic process communication. Follow the [shared setup](../../shared/SETUP.md) and
 [experiment protocol](../../shared/PROTOCOL.md). Read the background, work through
 the tutorial in order, and consult the annotated references at each milestone.
 

@@ -17,7 +17,7 @@ For an independent first experiment, start with the [standalone lab](standalone.
 It needs no previous engine implementation and produces saved data and figures.
 Use the [measurable goals](assessment.md) to track entry and full-project completion.
 
-P2 ownership, P3 modeling, and P7 topology; results from P5/P6 for final decisions. Follow the [shared setup](../../shared/SETUP.md) and
+P4 ownership, P2 modeling, and P7 topology; results from P5/P6 for final decisions. Follow the [shared setup](../../shared/SETUP.md) and
 [experiment protocol](../../shared/PROTOCOL.md). Read the background, work through
 the tutorial in order, and consult the annotated references at each milestone.
 

@@ -24,7 +24,7 @@ and layer-output relative L2. Compare equal-size weight errors in different chan
 Explain the difference using `delta_Y = X E.T` and activation magnitudes.
 
 For numerical experiments, reconstruct BF16 weights before GEMM if convenient;
-label these runs numerical-only. Predict ideal storage and whether the P3
+label these runs numerical-only. Predict ideal storage and whether the P2
 bottleneck could benefit from lower weight traffic.
 
 ## 3. Produce an actual calibrated checkpoint (7 hours)
@@ -76,7 +76,7 @@ Keep KV dtype, prompts, output policy, and cache condition fixed. Start with W1/
 then use W3 to test the changing weight/KV balance.
 
 Record serialized bytes, loaded packed bytes, scales, reserved memory, loading
-peak, workspace, TTFT, completion latency, goodput, and quality. Use P3 to predict
+peak, workspace, TTFT, completion latency, goodput, and quality. Use P2 to predict
 the speedup from reduced weight traffic, adding unpack/scale/compute costs supported
 by the trace. Explain why the observed result differs from an ideal fourfold byte
 reduction. Repeat selected points on 32B rather than duplicating the entire sweep.

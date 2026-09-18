@@ -351,6 +351,21 @@ These are hypotheses, not diagnoses from a chart alone. [Nsight Systems](https:/
 
 A model that misses the old 25% median-error target can still teach something if its failure is specific and the next experiment can distinguish causes. The [lab's completion checklist](code/lab.ipynb) retains calibration, held-out prediction, real-model coverage, and the profile-supported intervention. Use the [shared experiment protocol](../../shared/PROTOCOL.md) and [report rubric](../../shared/REPORT.md) for the full project.
 
+## From performance modeling to kernel optimization
+
+The next chapter uses the gap between these estimates and observations to
+identify kernel optimization opportunities. The theoretical roofline describes
+ideal limits; calibrated estimates describe expected behavior under stated
+assumptions. A residual becomes actionable when a trace links it to a mechanism
+such as repeated memory reads, materialized attention scores, poor small-shape
+utilization, or launch overhead. The gap itself is not a promised speedup.
+
+Chapter 3 tests a targeted kernel change in the same Qwen implementation and
+compares its integrated effect with an Amdahl prediction. Chapter 4 then builds
+scheduling and bounded KV memory around that measured model. This separates
+isolated model/kernel latency from the queueing and ownership costs added by a
+serving runtime.
+
 ## Reading path
 
 | Read | Purpose |
@@ -364,4 +379,4 @@ A model that misses the old 25% median-error target can still teach something if
 
 Sources checked on 2026-09-12. Model configurations are pinned above; match API and profiler details to the versions recorded by each notebook run.
 
-[Open the interactive lab](code/lab.ipynb) · [Previous: Reconstruct Qwen3](../01_reconstruct_qwen3/background.md) · [Course home](../../README.md) · [Next: Runtime and KV memory](../03_runtime_and_kv/README.md)
+[Open the interactive lab](code/lab.ipynb) · [Previous: Reconstruct Qwen3](../01_reconstruct_qwen3/background.md) · [Course home](../../README.md) · [Next: Kernel optimization](../03_kernels/README.md)

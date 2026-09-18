@@ -23,7 +23,7 @@ def module(chapter):
 
 class StandardLibraryLabs(unittest.TestCase):
     def test_pool_ownership_and_exhaustion(self):
-        module('03').check()
+        module('04').check()
 
     def test_exact_speculative_distribution(self):
         module('05').check()
@@ -59,7 +59,7 @@ class TensorLabs(unittest.TestCase):
             self.assertEqual(c.kv_bytes(1),kv)
 
     def test_online_attention_partial_tiles(self):
-        module('04').check()
+        module('03').check()
 
     def test_int4_roundtrip_and_error_bound(self):
         module('06').check()

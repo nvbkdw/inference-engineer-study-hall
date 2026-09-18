@@ -2,7 +2,11 @@
 
 ## 1. Establish a static baseline (3 hours)
 
-Use the P1 model with greedy decoding, a contiguous cache, and fixed batches.
+Reuse the Chapter 1/2 model and import Chapter 3's kernel adapters with greedy
+decoding, a contiguous cache, and fixed batches. Use Chapter 2's service-time
+predictions updated with Chapter 3's measured backend behavior. Freeze the
+backend during scheduling comparisons; retain the validated reference fallback
+for unsupported shapes. Carry the same model and kernel modules forward.
 Create W1/W2 request fixtures from the [protocol](../../shared/PROTOCOL.md). Log
 arrival, scheduled work, processed length, and each emitted token timestamp.
 Predict memory at batch 1/4/16 before admitting work.
@@ -13,7 +17,7 @@ tokens`, which can differ from history length by one pending token.
 ## 2. Implement a physical block pool (5 hours)
 
 ```bash
-python chapters/03_runtime_and_kv/code/lab.py
+python chapters/04_runtime_and_kv/code/lab.py
 ```
 
 Inspect `Pool.append`, `share_prefix`, and `release`. The sample manages ownership
@@ -69,7 +73,7 @@ and private suffix blocks. Include model identity, positions, and precision in
 the prefix key. Test identical prefixes followed by divergent suffixes, owner
 cancellation, and different prefixes of the same length.
 
-P2's sample exercises refcounts but does not validate content hashes or copy KV.
+P4's sample exercises refcounts but does not validate content hashes or copy KV.
 Those are student extensions. Do not enable shared partial-page append until
 copy-on-write has its own correctness tests.
 

@@ -48,7 +48,7 @@ python -c 'import torch; print(torch.__version__, torch.version.cuda); assert to
 ```
 
 No separate pytest dependency is needed: the suite uses Python's `unittest`.
-For the P4 CuTe implementation, add the optional kernel toolchain with
+For the P3 CuTe implementation, add the optional kernel toolchain with
 `uv sync --extra kernels` in the dedicated environment. Match the installed DSL
 release, examples, CUDA toolkit, and driver using the
 [CuTe quick start](https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/quick_start.html);
@@ -162,7 +162,7 @@ python -m unittest discover -s tests -v
 ```
 
 Know matrix multiplication, tensor strides, Python/PyTorch, probability, and basic
-GPU execution. Before P4, understand warps, shared memory, synchronization, and
+GPU execution. Before P3, understand warps, shared memory, synchronization, and
 CuTe layouts. Use [CS336](https://cs336.stanford.edu/) for architecture/resource
 preparation, and the pinned [CuTe setup guide](https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/quick_start.html)
 for the architecture-specific kernel lab. A Hopper kernel does not automatically
@@ -191,7 +191,7 @@ for cache management. Render non-thinking prompts once, save exact IDs, and run
 32B reference/custom models sequentially. Do not commit weights.
 
 Every chapter retains its full tutorial, measurable goals, background, references,
-and standalone entry experiment. P2/P5 model-only runs are preparation for their
+and standalone entry experiment. P4/P5 model-only runs are preparation for their
 Spark serving/speculation measurements, not substitutes for them. Students extend
 the references into the evolving engine as required by the original syllabus.
 Use [SELF_STUDY.md](SELF_STUDY.md), [PROTOCOL.md](PROTOCOL.md), and
@@ -202,9 +202,9 @@ Use [SELF_STUDY.md](SELF_STUDY.md), [PROTOCOL.md](PROTOCOL.md), and
 | Owner | Interface contract |
 |---|---|
 | P1 model | Explicit token positions and processed cache length; return logits and updated KV |
-| P2 runtime | Requests own page tables, processed length, pending token, and emission timestamps |
-| P3 modeling | Component rows record phase, shape, FLOPs, bytes, timing boundary, and manifest ID |
-| P4 attention | Explicit Q/KV layout and ragged lengths; unsupported shapes use a declared reference path |
+| P2 modeling | Component rows record phase, shape, FLOPs, bytes, timing boundary, and manifest ID |
+| P3 attention | Explicit Q/KV layout and ragged lengths; unsupported shapes use a declared reference path |
+| P4 runtime | Requests own page tables, processed length, pending token, and emission timestamps |
 | P5 speculation | Commit the accepted prefix; rejected positions become unreachable; correction/bonus stays pending until processed |
 | P6 precision | Serialized format, actual execution backend, and KV dtype are separate fields |
 | P7 distribution | State records rank ownership and sharding axes |

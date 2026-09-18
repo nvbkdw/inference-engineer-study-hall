@@ -17,7 +17,7 @@ For an independent first experiment, start with the [standalone lab](standalone.
 It needs no previous engine implementation and produces saved data and figures.
 Use the [measurable goals](assessment.md) to track entry and full-project completion.
 
-P1 correct caches, P2 state ownership, and P3 timing boundaries. Follow the [shared setup](../../shared/SETUP.md) and
+P1 correct caches, P4 state ownership, and P2 timing boundaries. Follow the [shared setup](../../shared/SETUP.md) and
 [experiment protocol](../../shared/PROTOCOL.md). Read the background, work through
 the tutorial in order, and consult the annotated references at each milestone.
 
@@ -45,4 +45,4 @@ illustrative outputs must not be reported as Qwen serving benchmarks.
 
 ## Navigation
 
-[Previous chapter](../04_kernels/README.md) · [Course home](../../README.md) · [Next chapter](../06_quantization/README.md)
+[Previous chapter](../04_runtime_and_kv/README.md) · [Course home](../../README.md) · [Next chapter](../06_quantization/README.md)

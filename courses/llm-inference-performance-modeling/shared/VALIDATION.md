@@ -1,5 +1,7 @@
 # Validation of the DGX Spark measurement path
 
+Historical project IDs below are preserved with their original validation records: P2 runtime is now Chapter 4, P3 performance modeling is now Chapter 2, and P4 kernels is now Chapter 3. Current commands and navigation use the new chapter numbers.
+
 The course defaults to DGX Spark GPU measurements. The newest Chapter 1 validation
 is dated 2026-09-12; earlier migration checks below are historical.
 CPU fixtures remain optional correctness/modeling aids; historical CPU timings

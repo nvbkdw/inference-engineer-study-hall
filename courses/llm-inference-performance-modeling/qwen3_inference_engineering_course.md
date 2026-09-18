@@ -214,9 +214,9 @@ Cross-node work requires two real hosts. Two processes on Spark validate protoco
 | Weeks | Project | Research question | Required evidence |
 |---|---|---|---|
 | 1–2 | P1. Implement Qwen3 | Can one implementation reproduce both checkpoints? | Tensor inventory, weight mapping, cached/full equivalence, first memory accounting |
-| 3–4 | P2. Build the runtime | How do scheduling and KV allocation change useful capacity? | Continuous batching, allocator invariants, latency/throughput and fragmentation curves |
-| 5–6 | P3. Predict performance | Which costs explain prefill and decode across sizes? | Shape inventory, calibrated model, predictions on withheld workloads |
-| 7–8 | P4. Optimize a kernel | Does a local kernel change improve model execution? | GEMM investigation, custom attention kernel, correctness, traces, Amdahl analysis |
+| 3–4 | P2. Predict performance | Which costs explain prefill and decode across sizes? | Shape inventory, calibrated model, predictions on withheld workloads, measured gaps |
+| 5–6 | P3. Optimize a kernel | Which measured gap can a kernel change reduce? | Gap diagnosis, GEMM investigation, custom attention kernel, correctness, traces, Amdahl analysis |
+| 7–8 | P4. Build the runtime | How do scheduling and KV allocation change useful capacity? | Continuous batching, allocator invariants, latency/throughput and fragmentation curves |
 | 9–10 | P5. Speculate with 8B → 32B | When does the draft pay for itself? | Exact verifier, state reconciliation, acceptance distribution, measured break-even |
 | 11–12 | P6. Quantize and evaluate | Where does lower precision produce a useful tradeoff? | Real quantized execution, quality/memory/performance comparison, speculation interaction |
 | 13–14 | P7. Distribute execution | When should a fixed GPU budget use TP or replicas? | TP implementation, collectives, fixed-resource comparison, scaling predictions |
@@ -384,61 +384,15 @@ Both models load without shape-specific patches; cache/chunk/batch equivalence c
 
 ---
 
-## 7. Project 2 — Build a runtime around bounded KV memory
+## 7. Project 2 — Build a model that predicts performance
 
-**Weeks 3–4 · Spark · Broad experiments: 8B; selected checks: 32B**
-
-**Research question:** which scheduling and memory decisions change the amount of work the system can complete within a latency requirement?
-
-**Read first:** [Orca](https://www.usenix.org/conference/osdi22/presentation/yu) for iteration-level scheduling; [PagedAttention](https://arxiv.org/abs/2309.06180) for allocation/sharing; Mini-SGLang’s scheduler and cache code as the source comparison. Read the cache section of the [SGLang paper](https://arxiv.org/abs/2312.07104) when adding prefix reuse.
-
-### Week 3: make the state machine explicit
-
-Implement request states for waiting, prefill, decode, completed, and cancelled. Track token IDs, cache handles, absolute positions, generated length, and timing.
-
-Begin with static batches and a contiguous KV buffer. Then add a physical block pool and per-request block tables. Admission must reserve enough working space for the next scheduled step; do not rely on an OOM exception as the scheduling policy.
-
-Build a scheduler that selects work under both a token budget and a free-block budget. Add continuously changing decode batches. Define how a newly admitted prefill shares an iteration with existing decoding requests.
-
-Use a simple gather-to-contiguous attention adapter for correctness if necessary. Count and profile its gather cost. Replace it with a supported paged-attention backend for a meaningful efficient runtime baseline. Owning a block table does not by itself make memory access efficient.
-
-### Week 4: investigate one interference problem
-
-Add chunked prefill and compare unchunked execution with two chunk sizes, initially 256 and 1,024 tokens. Keep the scheduling policy explicit: for example, reserve decode work first, then fill the remaining token budget with prefill chunks.
-
-Add cancellation and release behavior. Add whole-block exact-prefix reuse with reference counts and read-only shared blocks. A full radix-tree implementation is an extension. If shared partial blocks can be extended, implement copy-on-write or keep that case unsupported and explicit.
-
-Run an arrival trace mixing short interactions with long-prefill requests. The hypothesis is that long prefills can delay decode iterations; chunking may reduce that delay while changing prefill efficiency.
-
-### Correctness and measurements
-
-Check that batching, chunk size, and prefix reuse preserve the intended logits under your numerical criteria. Verify that cancelled/completed requests release their blocks, live requests never share writable blocks accidentally, and cache exhaustion produces bounded waiting or a declared rejection.
-
-Plot throughput versus TTFT/ITL, useful versus allocated KV bytes, and the time spent in prefill/decode/gather/scheduling.
-
-Repeat one representative comparison on 32B. Keep model quality out of the scheduler comparison by changing only runtime behavior.
-
-### Completion criterion
-
-The runtime handles interleaved request lengths and cancellation without stale cache state, and you can explain one scheduling tradeoff with a trace and a workload curve.
-
-**Chapter draft:** “From token generation to an inference scheduler.”
-
-**Oral defense:** why might smaller prefill chunks improve ITL while hurting total throughput?
-
-**Extension:** CUDA graph buckets or more sophisticated prefix-cache eviction, after correctness is stable.
-
----
-
-## 8. Project 3 — Build a model that predicts performance
-
-**Weeks 5–6 · Spark; optional prepared H100 baseline**
+**Weeks 3–4 · Spark; optional prepared H100 baseline**
 
 **Research question:** how much performance can you explain from tensor shapes and measured hardware behavior before timing the whole model?
 
 **Read first:** [All About Rooflines](https://jax-ml.github.io/scaling-book/roofline/), selected [transformer math](https://jax-ml.github.io/scaling-book/transformers/), and [transformer inference](https://jax-ml.github.io/scaling-book/inference/). Use [Nsight Systems](https://docs.nvidia.com/nsight-systems/UserGuide/index.html) for the timeline and [Nsight Compute](https://docs.nvidia.com/nsight-compute/ProfilingGuide/index.html) for a few important kernels.
 
-### Week 5: count operations and calibrate components
+### Week 3: count operations and calibrate components
 
 Record actual GEMM shapes as \([M,K]\times[K,N]\), including whether projections are fused. For decode, M is the scheduled token count; for prefill it is the flattened batch/chunk token count.
 
@@ -457,7 +411,7 @@ For a GEMM, start with \(2MKN\) FLOPs. Derive the attention FLOPs from actual qu
 
 Calibrate a streaming bandwidth benchmark, representative GEMMs at M = 1, 4, 16, 128, and 512, and a small set of attention shapes. Use dense compute throughput for the actual precision. Spark’s advertised sparse FP4 performance is not BF16 compute throughput.
 
-### Week 6: predict, then measure withheld workloads
+### Week 4: predict, then measure withheld workloads
 
 For each sequential kernel j, start with:
 
@@ -466,9 +420,9 @@ t_j\approx \max(F_j/C_{\mathrm{eff},j},\,Q_j/B_{\mathrm{eff},j})
 +t_{\mathrm{launch},j}.
 \]
 
-Sum the relevant kernel costs, then add measured CPU scheduling and synchronization costs. Refine using the actual execution timeline. A single global maximum over the entire model can hide sequential attention and MLP costs.
+Sum the relevant kernel costs, then add measured host dispatch and synchronization costs. Refine using the actual execution timeline. A single global maximum over the entire model can hide sequential attention and MLP costs.
 
-Maintain separate prefill, decode, and queueing models. Add a small replay/simulation model only after the service-time model works; a complicated simulator is unnecessary here.
+Maintain separate isolated prefill and decode models. Queueing and request scheduling are added in Chapter 4; they are not prerequisites for these model measurements. Carry the frozen predictions, observed residuals, and profiler evidence into Chapter 3 to select a kernel optimization hypothesis.
 
 Fit on selected 8B shapes. Withhold an intermediate batch size and a context length. Predict them before measuring. Then predict selected 32B points from its dimensions. If an unseen shape requires a separate microbenchmark, label that as additional calibration.
 
@@ -492,17 +446,19 @@ Publish predicted versus observed prefill/decode time on at least six withheld f
 
 ---
 
-## 9. Project 4 — Connect CuTe kernels to model performance
+## 8. Project 3 — Connect CuTe kernels to model performance
 
-**Weeks 7–8 · Spark-compatible kernels; H100 for the selected Hopper study**
+**Weeks 5–6 · Spark-compatible kernels; H100 for the selected Hopper study**
 
-**Research question:** does the operation you optimized matter to the whole inference workload?
+**Research question:** which gap between Chapter 2’s estimated and observed performance can a kernel change reduce, and how much does that improve the whole model?
+
+Carry forward Chapter 2’s frozen bounds, calibrated estimates, raw timings, and a separate profile. Attribute a gap to a testable mechanism before selecting a kernel change; the full distance to a roofline is not automatically recoverable. Predict the kernel and integrated model effects before implementation, then check correctness, measure, and explain the residual.
 
 **Read first:** [FlashAttention](https://arxiv.org/abs/2205.14135) for tiled attention and online normalization, [FlashAttention-2](https://arxiv.org/abs/2307.08691) for work partitioning, and the [CuTe DSL documentation](https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/cute_dsl.html). For the H100 investigation, study [FlashAttention-3](https://arxiv.org/abs/2407.08608) and one relevant official implementation. Use the [FlashInfer paper](https://arxiv.org/abs/2501.01005) and [source](https://github.com/flashinfer-ai/flashinfer) to connect attention layout with serving.
 
-### Week 7: deepen GEMM using the model’s shapes
+### Week 5: deepen GEMM using the model’s shapes
 
-Take one GEMM from your existing CuTe work. Benchmark model-derived shapes at M = 1, 4, 16, 128, and 512. Compare with the actual vendor/backend implementation used in the runtime.
+Take one GEMM from your existing CuTe work. Benchmark model-derived shapes at M = 1, 4, 16, 128, and 512. Compare with the actual vendor/backend implementation measured in Chapter 2.
 
 Study one advanced implementation for the chosen GPU: data movement, tile layout, staging, synchronization, and epilogue. On Hopper, this can include TMA, warp-group MMA, and producer/consumer work division. Follow instructions supported by that architecture; do not assume the same design runs on Spark.
 
@@ -510,7 +466,7 @@ Make one bounded change to your implementation: tile size, stage count, memory l
 
 Stop after one explained modification. Reimplementing every advanced GEMM algorithm is outside the core.
 
-### Week 8: implement attention with a clear boundary
+### Week 6: implement attention with a clear boundary
 
 The recommended deep implementation is a **forward-only GQA decode kernel** with head dimension 128, BF16 inputs/cache, and FP32 accumulation.
 
@@ -520,7 +476,7 @@ For partial attention results with maxima \(m_a\), normalizers \(\ell_a\), and u
 
 Also implement a small PyTorch tiled-prefill reference that applies the same online-softmax idea without materializing the full score matrix. This provides the FlashAttention derivation. A competitive CuTe prefill kernel and backward attention are extensions.
 
-Integrate the decode kernel through your runtime’s attention interface. If your kernel only accepts contiguous KV, measure its gather cost and show both kernel-only and integrated timing. A paged-KV extension is useful only after the simpler kernel is correct.
+Integrate the decode kernel through an attention adapter extending the Chapter 1/2 model, reusing its weights, projections, and cache semantics. Keep kernels and adapters in importable modules under Chapter 3’s `code/` directory. Measure layout conversion and dispatch costs, showing kernel-only, adapter-inclusive, and full-model timing. Chapter 4 imports these modules and adds scheduling and paged KV ownership, including any gather cost.
 
 If your measured bottleneck is prefill and you strongly prefer that specialization, choose a bounded forward-only CuTe prefill kernel instead. Keep the same correctness and integration requirements, and retain decode attention as a measured library comparison.
 
@@ -547,6 +503,52 @@ One model-derived GEMM change is explained, one custom attention path is numeric
 **Oral defense:** why do prefill and decode attention need different parallelization choices?
 
 **Extension:** paged addressing, more GQA reuse, a full CuTe prefill path, or a B300 port. Pick one.
+
+---
+
+## 9. Project 4 — Build a runtime around bounded KV memory
+
+**Weeks 7–8 · Spark · Broad experiments: 8B; selected checks: 32B**
+
+**Research question:** which scheduling and memory decisions change the amount of work the system can complete within a latency requirement?
+
+**Read first:** [Orca](https://www.usenix.org/conference/osdi22/presentation/yu) for iteration-level scheduling; [PagedAttention](https://arxiv.org/abs/2309.06180) for allocation/sharing; Mini-SGLang’s scheduler and cache code as the source comparison. Read the cache section of the [SGLang paper](https://arxiv.org/abs/2312.07104) when adding prefix reuse.
+
+### Week 7: make the state machine explicit
+
+Implement request states for waiting, prefill, decode, completed, and cancelled. Track token IDs, cache handles, absolute positions, generated length, and timing.
+
+Reuse the Chapter 1/2 model and Chapter 3’s kernel adapters, retaining the validated reference fallback. Begin with static batches and a contiguous KV buffer. Use Chapter 2’s service-time model, updated with Chapter 3’s measurements, to predict scheduling tradeoffs. Keep the backend fixed while comparing policies. Then add a physical block pool and per-request block tables. Admission must reserve enough working space for the next scheduled step; do not rely on an OOM exception as the scheduling policy.
+
+Build a scheduler that selects work under both a token budget and a free-block budget. Add continuously changing decode batches. Define how a newly admitted prefill shares an iteration with existing decoding requests.
+
+Use a simple gather-to-contiguous attention adapter for correctness if necessary. Count and profile its gather cost. Replace it with a supported paged-attention backend for a meaningful efficient runtime baseline. Owning a block table does not by itself make memory access efficient.
+
+### Week 8: investigate one interference problem
+
+Add chunked prefill and compare unchunked execution with two chunk sizes, initially 256 and 1,024 tokens. Keep the scheduling policy explicit: for example, reserve decode work first, then fill the remaining token budget with prefill chunks.
+
+Add cancellation and release behavior. Add whole-block exact-prefix reuse with reference counts and read-only shared blocks. A full radix-tree implementation is an extension. If shared partial blocks can be extended, implement copy-on-write or keep that case unsupported and explicit.
+
+Run an arrival trace mixing short interactions with long-prefill requests. The hypothesis is that long prefills can delay decode iterations; chunking may reduce that delay while changing prefill efficiency.
+
+### Correctness and measurements
+
+Check that batching, chunk size, and prefix reuse preserve the intended logits under your numerical criteria. Verify that cancelled/completed requests release their blocks, live requests never share writable blocks accidentally, and cache exhaustion produces bounded waiting or a declared rejection.
+
+Plot throughput versus TTFT/ITL, useful versus allocated KV bytes, and the time spent in prefill/decode/gather/scheduling.
+
+Repeat one representative comparison on 32B. Keep model quality out of the scheduler comparison by changing only runtime behavior.
+
+### Completion criterion
+
+The runtime handles interleaved request lengths and cancellation without stale cache state, and you can explain one scheduling tradeoff with a trace and a workload curve.
+
+**Chapter draft:** “From token generation to an inference scheduler.”
+
+**Oral defense:** why might smaller prefill chunks improve ITL while hurting total throughput?
+
+**Extension:** CUDA graph buckets or more sophisticated prefix-cache eviction, after correctness is stable.
 
 ---
 
@@ -893,9 +895,9 @@ Read one conceptual source and one relevant code path closely. Scan the other re
 | Project | Essential conceptual reading | Code/documentation focus | Reading question |
 |---|---|---|---|
 | P1 | Qwen3 architecture; CS336 architecture/resource accounting | Qwen configs and attention/MLP/cache implementation | Which dimensions and state are actually different between 8B and 32B? |
-| P2 | Orca scheduling; PagedAttention allocation | Mini-SGLang scheduler/cache; SGLang cache section if needed | Who owns each block at every request transition? |
-| P3 | Scaling Book rooflines and inference | Nsight timelines; SGLang benchmark definitions | Which term can explain the observed curve? |
-| P4 | FlashAttention online softmax; FA2 work division | One CuTe GEMM and one attention implementation for your GPU | Where are values reused and where is work exposed? |
+| P2 | Scaling Book rooflines and inference | Nsight timelines; SGLang benchmark definitions | Which term can explain the observed curve? |
+| P3 | FlashAttention online softmax; FA2 work division | One CuTe GEMM and one attention implementation for your GPU | Where are values reused and where is work exposed? |
+| P4 | Orca scheduling; PagedAttention allocation | Mini-SGLang scheduler/cache; SGLang cache section if needed | Who owns each block at every request transition? |
 | P5 | One full speculative-sampling algorithm/proof; compare the second paper | SGLang STANDALONE verifier/cache path | Which distribution and cache prefix does each position represent? |
 | P6 | MIT quantization; AWQ method and limitations | One quantizer and its packed-weight execution backend | Which error is introduced, and where is execution overhead paid? |
 | P7 | Megatron tensor-parallel construction | TorchTitan placement; NCCL tests and your traces | Which dimensions stay local and which outputs require communication? |
@@ -961,9 +963,9 @@ Label plots as measured, modeled, or illustrative. A useful chapter usually need
 |---|---|---|
 | 0 | From text to a serving system (conceptual reading) | Transformer and request-flow diagrams; no project |
 | 1 | Reconstructing Qwen3 | Predicted versus measured memory by context |
-| 2 | An inference scheduler from first principles | Goodput and token latency under mixed arrivals |
-| 3 | Predicting inference latency | Predicted versus observed prefill/decode times |
-| 4 | From a kernel optimization to model speed | Kernel speedup versus integrated speedup |
+| 2 | Predicting inference latency | Predicted versus observed prefill/decode times |
+| 3 | From a performance gap to kernel optimization | Kernel speedup versus integrated speedup |
+| 4 | An inference scheduler from first principles | Goodput and token latency under mixed arrivals |
 | 5 | Speculating with an 8B draft | Speedup versus accepted tokens per cycle |
 | 6 | Quantization as a serving choice | Quality versus memory/goodput |
 | 7 | Tensor parallelism or replicas | Goodput under fixed latency conditions |

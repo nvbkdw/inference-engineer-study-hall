@@ -1,6 +1,6 @@
-# Chapter 3: An inference scheduler from first principles
+# Chapter 4: An inference scheduler from first principles
 
-**P2 · Weeks 3–4 · 30–36 hours**  
+**P4 · Weeks 7–8 · 30–36 hours**
 **Laboratory:** DGX Spark serving; untimed allocator/simulation exercise
 
 How do scheduling and bounded KV allocation change useful serving capacity?
@@ -17,7 +17,11 @@ For an independent first experiment, start with the [standalone lab](standalone.
 It needs no previous engine implementation and produces saved data and figures.
 Use the [measurable goals](assessment.md) to track entry and full-project completion.
 
-P1's validated model and cache semantics. Follow the [shared setup](../../shared/SETUP.md) and
+Reuse Chapter 1's validated model and cache semantics, Chapter 2's measured
+service curves, and Chapter 3's attention adapters and kernel comparisons.
+Keep the validated reference backend available for unsupported shapes and cache
+layouts. This chapter adds request scheduling and bounded KV ownership around
+that implementation. Follow the [shared setup](../../shared/SETUP.md) and
 [experiment protocol](../../shared/PROTOCOL.md). Read the background, work through
 the tutorial in order, and consult the annotated references at each milestone.
 
@@ -45,4 +49,4 @@ illustrative outputs must not be reported as Qwen serving benchmarks.
 
 ## Navigation
 
-[Previous chapter](../02_performance_model/background.md) · [Course home](../../README.md) · [Next chapter](../04_kernels/README.md)
+[Previous chapter](../03_kernels/README.md) · [Course home](../../README.md) · [Next chapter](../05_speculative_decoding/README.md)

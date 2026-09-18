@@ -8,7 +8,7 @@ import torch
 
 
 def main():
-    args=begin('04',__doc__,['CUDA FP32 prefill, B=1 Hq=8 Hkv=2 R=128',
+    args=begin('03',__doc__,['CUDA FP32 prefill, B=1 Hq=8 Hkv=2 R=128',
         'Ordinary PyTorch loops; not a fused GPU kernel or an integrated Qwen result',
         'Score temporary counts exclude all other tensors and allocator state'])
     write_json(args.out/'prediction.json',dict(hypothesis='Online attention reduces score temporary size; Python tiling may increase latency.',
@@ -28,8 +28,8 @@ def main():
                 rows.extend(dict(length=s,method=method,repeat=j,measured_ms=ms)
                             for j,ms in enumerate(time_cuda(fn,args.repeats,2)))
     write_csv(args.out/'score_storage.csv',storage)
-    plot(args.out/'latency.svg',rows,'length','measured_ms','method','P4 CUDA attention latency: median and range')
-    plot(args.out/'score_storage.svg',storage,'length','score_temporary_bytes','method','P4 modeled score temporary size')
+    plot(args.out/'latency.svg',rows,'length','measured_ms','method','P3 CUDA attention latency: median and range')
+    plot(args.out/'score_storage.svg',storage,'length','score_temporary_bytes','method','P3 modeled score temporary size')
     finish(args,rows,dict(correctness='passed',max_abs_error=error,matched_cases=12,
                          scope='CUDA algorithm exercise; CuTe and integration remain GPU milestones'))
 

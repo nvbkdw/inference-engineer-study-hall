@@ -25,12 +25,14 @@ The plan assumes **15–18 focused hours per week**, familiarity with Python/PyT
 | **Week 1 opening** | [0. Introduction](chapters/00_introduction/README.md) | A conceptual map from tokens and transformer operators to distributed serving; reading only |
 | **1–2**   | [1. Reconstruct Qwen3](chapters/01_reconstruct_qwen3/background.md) | Numerical validation on both models; memory accounting |
 | **3–4**   | [2. Model inference performance](chapters/02_performance_model/background.md) | Derive Qwen3 FLOPs, measure prefill/decode, and interpret rooflines and MFU |
-| **5–6**   | [3. Build scheduling and bounded KV memory](chapters/03_runtime_and_kv/README.md) | Explain latency, throughput, and memory tradeoffs |
-| **7–8**   | [4. Optimize GEMM and attention](chapters/04_kernels/README.md) | Explain kernel performance and its effect on model execution |
+| **5–6**   | [3. Optimize GEMM and attention](chapters/03_kernels/README.md) | Use prediction–measurement gaps to select kernel changes and test their model-level effect |
+| **7–8**   | [4. Build scheduling and bounded KV memory](chapters/04_runtime_and_kv/README.md) | Extend the measured model and kernel backends into a runtime; explain latency, throughput, and memory tradeoffs |
 | **9–10**  | [5. Speculate with 8B → 32B](chapters/05_speculative_decoding/README.md) | Correct verification/rollback and a measured break-even analysis |
 | **11–12** | [6. Quantize and evaluate quality](chapters/06_quantization/README.md) | Compare memory, latency, goodput, and interaction with speculation |
 | **13–14** | [7. Implement TP and compare replicas](chapters/07_tensor_parallelism/README.md) | Choose how two GPUs should serve a fixed workload |
 | **15–16** | [8. Transfer KV and evaluate P/D](chapters/08_prefill_decode/README.md) | Evaluate disaggregation and defend a final serving design |
+
+Chapters 2–4 follow one investigation: **predict performance → measure and diagnose the gap → optimize a kernel → build the serving runtime**. Chapter 2 establishes theoretical bounds, calibrated estimates, and observed model latency. Chapter 3 uses profiler evidence to identify which gaps a kernel change can address, predicts its benefit, and tests it in the same Qwen implementation. Chapter 4 then adds scheduling and bounded KV ownership around that model and its reusable kernel backends. A gap below the roofline is a starting hypothesis, not proof that all of it can be eliminated.
 
 Chapter 1 has one [theory and reading guide](chapters/01_reconstruct_qwen3/background.md) and two interactive notebooks: [Lab 1, reconstruct and measure tiny](chapters/01_reconstruct_qwen3/code/lab.ipynb), then [Lab 2, run full 8B/32B weights](chapters/01_reconstruct_qwen3/code/lab2.ipynb). Instructions and acceptance goals live in the notebooks; reusable utilities remain in `code/`. Chapter 2 has one [theory guide](chapters/02_performance_model/background.md) and one [interactive performance lab](chapters/02_performance_model/code/lab.ipynb), consolidating hardware calibration, analytical Qwen3 FLOPs, real 8B/32B timings, MFU, and roofline plots. Chapters 3–8 retain separate overview, background, standalone lab, full tutorial, assessment, and reference pages. The projects share model conventions and an experiment protocol. Chapter 0 contains only conceptual readings, equations, diagrams, and references.
 
@@ -38,7 +40,7 @@ Chapter 1 has one [theory and reading guide](chapters/01_reconstruct_qwen3/backg
 
 The code provides small executable references for core mechanisms. Students extend these into the full engine, CuTe kernels, real quantization path, and serving experiments described in the tutorials. CPU checks and illustrative calculations are labeled separately from required GPU and real-checkpoint validation.
 
-The [project dependency manifest](pyproject.toml) includes all supplied-script and checkpoint dependencies. The setup guide uses `uv sync --python 3.12` in a dedicated `.venv-spark`; add `--extra kernels` for the P4 CuTe DSL toolchain.
+The [project dependency manifest](pyproject.toml) includes all supplied-script and checkpoint dependencies. The setup guide uses `uv sync --python 3.12` in a dedicated `.venv-spark`; add `--extra kernels` for the P3 CuTe DSL toolchain.
 
 After activating a Spark-compatible CUDA environment using [setup](shared/SETUP.md), run the first measurement and optional correctness checks:
 

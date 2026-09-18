@@ -1,8 +1,49 @@
-# Background: data reuse and stable tiled attention
+# Chapter 3 background: from performance gaps to kernel optimization
 
 GPU optimization makes data movement, parallel work, and resource use explicit.
 A kernel can be mathematically correct but slow because it exposes too little
 parallelism, rereads memory, spills registers, or waits at synchronization points.
+
+## From Chapter 2's model to an optimization hypothesis
+
+[Chapter 2](../02_performance_model/background.md) derives arithmetic intensity
+and roofline bounds, then compares predictions with measured Qwen3 latency.
+For one operation, let `F` be its FLOPs, `Q` its modeled minimum bytes, `C` the
+assumed compute ceiling in FLOP/s, and `beta` the bandwidth ceiling in byte/s.
+Then `AI = F/Q` in FLOP/byte and the ideal latency bound in seconds is
+`t_bound = max(F/C, Q/beta)`: the operation must both perform the arithmetic
+and move the data, even if those costs overlap perfectly.
+
+Keep three quantities separate: `t_bound`, a calibrated estimate `t_est` using
+measured shape-specific rates and overheads, and observed latency `t_obs`.
+The signed residual `t_obs - t_est` tests the calibrated model; the distance
+`t_obs - t_bound` suggests potential headroom under the bound's assumptions.
+Neither gap is automatically recoverable. Sequential kernels, launch latency,
+cache copies, redundant reads, and small workloads can prevent attaining an
+aggregate roofline. An observation below the supposed bound requires checking
+counting assumptions, cache residency, ceilings, and timing boundaries first.
+
+Profiler evidence connects the gap to a mechanism:
+
+| Evidence at a fixed workload | Candidate mechanism | Kernel hypothesis |
+|---|---|---|
+| Traffic exceeds the compulsory-byte model | Materialized scores or repeated KV reads | Tiling, online softmax, or GQA reuse can reduce transfers |
+| Small-M GEMMs fall well below large-M calibration | Wasted tile rows or too little parallel work | A different tile shape can improve useful work per launch |
+| Long-context decode exposes too few active programs | Too few request/head work groups | Context splitting may help if its combine cost is small enough |
+| Many short launches and intermediate tensors dominate | Dispatch and intermediate traffic | Fusion may help; reducing FLOPs alone may not |
+
+Use a separate trace to distinguish these hypotheses, and keep ordinary timing
+samples free of profiler overhead. These comparisons use the actual Qwen3-8B
+and Qwen3-32B shapes from Chapter 2, including explicit query width `Hq*R` and
+MLP intermediate width `I`; do not substitute hidden width `D` for query width.
+
+As an **illustrative calculation, not a measurement**, suppose a model step
+takes 10 ms, of which attention takes 3 ms. Its attention bound is 1 ms, but
+a proposed tiled kernel is predicted to take 1.5 ms. Keeping other work fixed
+predicts `10 - 3 + 1.5 = 8.5 ms`, or a speedup of `10/8.5 = 1.176`.
+If the adapter adds 0.5 ms, the prediction becomes 9 ms, or `1.111` times
+faster. Even eliminating attention entirely leaves 7 ms. This connects the
+local gap to the model-level benefit before implementation.
 
 ## GEMM tiles
 

@@ -1,5 +1,7 @@
 # Course delivery and platform audit
 
+Historical project IDs below are preserved with their original validation records: P2 runtime is now Chapter 4, P3 performance modeling is now Chapter 2, and P4 kernels is now Chapter 3. Current commands and navigation use the new chapter numbers.
+
 A reading-only [Chapter 0](../chapters/00_introduction/README.md) introduces architecture, serving, and performance modeling without code or projects. It fits within the opening Week 1 reading allocation.
 
 The eight-project, 16-week course structure is retained: each project chapter supplies

@@ -22,11 +22,10 @@ if importlib.util.find_spec('torch'):
 @unittest.skipUnless(AVAILABLE,'PyTorch and Matplotlib required for experiment artifacts')
 class StandaloneExperiments(unittest.TestCase):
     def run_chapters(self,numbers):
-        expected_rows={'01':30,'02':9,'04':36,'05':36,'06':30,'07':12,'08':12}
+        expected_rows={'01':30,'04':9,'03':36,'05':36,'06':30,'07':12,'08':12}
         with tempfile.TemporaryDirectory(prefix='course-experiments-') as directory:
             for number in numbers:
-                # The scheduling experiment retains its syllabus project ID after the folder reorder.
-                chapter=(ROOT/'chapters/03_runtime_and_kv') if number == '02' else next((ROOT/'chapters').glob(number+'_*'))
+                chapter=next((ROOT/'chapters').glob(number+'_*'))
                 with self.subTest(chapter=number):
                     out=Path(directory)/number
                     command=[sys.executable]
@@ -53,10 +52,10 @@ class StandaloneExperiments(unittest.TestCase):
                     self.assertEqual(manifest['chapter'],number)
                     self.assertEqual(manifest['repeats'],3)
                     self.assertTrue(manifest['source_sha256'])
-                    if number in ['01','04','06']:
+                    if number in ['01','03','06']:
                         self.assertTrue(manifest['hardware']['device'].startswith('cuda'))
                         self.assertIn('CUDA',manifest['result_kind'])
-                    elif number in ['02','05']:
+                    elif number in ['04','05']:
                         self.assertIsNone(manifest['timing'])
                     else:
                         self.assertEqual(manifest['backend'],'nccl')
@@ -69,10 +68,10 @@ class StandaloneExperiments(unittest.TestCase):
                         self.assertTrue(png.read_bytes().startswith(b'\x89PNG\r\n\x1a\n'))
                     if number=='01':
                         self.assertEqual(summary['exact_cache_byte_matches'],5)
-                    elif number=='02':
+                    elif number=='04':
                         self.assertTrue(summary['ownership_released'])
                         self.assertTrue(all(int(row['completed'])==90 for row in rows))
-                    elif number=='04':
+                    elif number=='03':
                         self.assertEqual(summary['matched_cases'],12)
                     elif number=='05':
                         self.assertLessEqual(summary['max_first_token_deviation'],summary['hoeffding_epsilon'])
@@ -82,11 +81,11 @@ class StandaloneExperiments(unittest.TestCase):
                         self.assertEqual(summary['correctness'],'all payloads matched')
 
     def test_untimed_model_artifacts(self):
-        self.run_chapters(['02','05'])
+        self.run_chapters(['04','05'])
 
     @unittest.skipUnless(CUDA,'DGX Spark/CUDA GPU required; no CPU timing substitute')
     def test_spark_measurement_artifacts(self):
-        self.run_chapters(['04','06'])
+        self.run_chapters(['03','06'])
 
     @unittest.skipUnless(CUDA and (ROOT/'models/qwen3-tiny/provenance.json').is_file(),
                          'Spark CUDA and prepared real two-layer weights required')
@@ -108,7 +107,7 @@ class StandaloneExperiments(unittest.TestCase):
             self.assertIn('One DGX Spark has one GPU',result.stderr)
 
     def test_nonempty_output_is_preserved(self):
-        chapter=ROOT/'chapters/03_runtime_and_kv/code/experiment.py'
+        chapter=ROOT/'chapters/04_runtime_and_kv/code/experiment.py'
         with tempfile.TemporaryDirectory() as directory:
             path=Path(directory)
             marker=path/'prediction.json'

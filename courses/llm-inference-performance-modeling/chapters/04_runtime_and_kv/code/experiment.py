@@ -62,7 +62,7 @@ def simulate(trace, chunk, pages=256, page_size=16, token_budget=256):
 
 
 def main():
-    args = begin('02',__doc__,['Every time/rate is simulated, never GPU measured',
+    args = begin('04',__doc__,['Every time/rate is simulated, never GPU measured',
         'Decode first, FCFS admission, token budget 256, conservative full-lifetime page reservation',
         'Illustrative fixed SLO: TTFT <= 20 ms and maximum token gap <= 5 ms'], measurement=False)
     write_json(args.out/'prediction.json',dict(hypothesis='Smaller chunks reduce prefill blocking but add iteration overhead.',
@@ -90,7 +90,7 @@ def main():
                              simulated_goodput_rps=1000*eligible/duration))
     write_json(args.out/'traces.json',traces)
     write_csv(args.out/'requests.csv',requests)
-    plot(args.out/'goodput.svg',rows,'chunk','simulated_goodput_rps','kind','P2 simulated policy comparison: median and range')
+    plot(args.out/'goodput.svg',rows,'chunk','simulated_goodput_rps','kind','P4 simulated policy comparison: median and range')
     finish(args,rows,dict(scope='service model simulation',all_requests_completed=True,
                          ownership_released=True,trace_replays=args.repeats*3))
 

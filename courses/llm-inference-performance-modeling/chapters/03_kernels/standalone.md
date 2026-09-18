@@ -21,8 +21,8 @@ assumptions and numerical predictions before the corresponding measurements.
 ## 2. Check correctness, then measure on Spark
 
 ```bash
-OMP_NUM_THREADS=1 python chapters/04_kernels/code/lab.py
-python chapters/04_kernels/code/experiment.py --out results/p04-first --repeats 3
+OMP_NUM_THREADS=1 python chapters/03_kernels/code/lab.py
+python chapters/03_kernels/code/experiment.py --out results/p03-first --repeats 3
 ```
 
 Compare `dense_attention` and `online_attention`. Both use the same q/k/v fixture and mask. The tiled implementation repeats KV heads and makes many PyTorch calls; it is a numerical reference, not a fused kernel.
