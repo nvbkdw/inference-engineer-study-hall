@@ -325,7 +325,53 @@ The lab deliberately measures narrower, reproducible boundaries:
 
 Use these labels rather than claiming an isolated forward benchmark measures production serving latency. CUDA execution is asynchronous; unsynchronized Python timing can measure launch submission alone. The lab warms the full prefill/decode path, uses inference mode, synchronizes appropriate boundaries, retains raw repeats, and rebuilds the cache for every independent run. It does not mix model loading or tokenization into forward time. [PyTorch CUDA events](https://docs.pytorch.org/docs/stable/generated/torch.cuda.Event.html)
 
-For a fixed batch, each decode step emits $B$ tokens. Aggregate decode throughput is $B/t_{step}$; it is not the reciprocal of each request's TBT multiplied by prompt length. For varying step contexts, calculate aggregate token throughput as total emitted tokens divided by total time, and achieved FLOP/s as summed work divided by summed time, rather than averaging per-step rates.
+For a prompt of $S$ tokens per sequence and batch $B$, prefill input throughput is $BS/t_{prefill}$ in tok/s, with $t_{prefill}$ in seconds. This counts processed prompt tokens, even though prefill produces only one first output token per sequence. Use the declared synchronized wall interval through first-token selection for this local metric.
+
+For a fixed batch, each decode step emits $B$ tokens. Aggregate decode throughput is $B/t_{step}$; it is not the reciprocal of each request's TBT multiplied by prompt length. For $K$ decode calls at growing contexts, output throughput is $BK/\sum_{j=1}^{K}t_j$ and mean local TBT is $\sum_j t_j/K$. Exclude prefill and its first output token from both decode totals. Calculate aggregate token throughput as total emitted tokens divided by total time, and achieved FLOP/s as summed work divided by summed time, rather than averaging per-step rates.
+
+Compare these metrics across a batch-size × initial-context-length grid. Hold context fixed to study batch scaling, and hold batch fixed to study context scaling. Prefill input tok/s and decode output tok/s describe different work. Summarize each repeat separately before taking medians and ranges; retain every decode prefix to show the growing-cache window.
+
+### Analytical latency–throughput tradeoffs
+
+At fixed prompt length $S$ tokens per sequence, vary batch size $B$. Using the
+previous FLOP and traffic ledgers, define the predicted prefill time in seconds
+as $\widehat t_{prefill}=\max(F_{prefill}/C,Q_{prefill}/\beta)$. Treating this
+forward-only bound as an optimistic local TTFT gives the prefill chart coordinates
+
+$$
+(x,y)_{prefill}=\left(1000\widehat t_{prefill},
+\frac{BS}{\widehat t_{prefill}}\right),
+$$
+
+where $x$ is milliseconds and $y$ is aggregate input tok/s. The batch processes
+$BS$ prompt tokens, although its prefill logits supply only $B$ first output
+tokens. If compute dominates and work grows linearly with batch at fixed $S$,
+TTFT grows roughly with $B$ while input throughput approaches a plateau.
+
+For a single decode step with $S$ cached tokens before appending, use
+$\widehat t_{decode}=\max(F_{decode}/C,Q_{decode}/\beta)$, counting attention
+over $S+1$ positions. **Interactivity** is the rate at which one user receives
+output tokens. With one token per user per synchronous step, it is
+$1/\widehat t_{decode}$; the batch produces $B$ tokens in that same time. Thus
+
+$$
+(x,y)_{decode}=\left(\frac{1}{\widehat t_{decode}},
+\frac{B}{\widehat t_{decode}}\right),\qquad y=Bx.
+$$
+
+Here $x$ is output tok/s per user and $y$ is aggregate output tok/s. Increasing
+batch amortizes shared weight traffic but increases per-request KV traffic and
+total compute, so aggregate throughput can rise while interactivity falls.
+For an **illustrative prediction**, a 50 ms decode step at $B=4$ gives
+20 tok/s per user and 80 tok/s in total. A 1 s prefill at $S=2048$, $B=4$
+gives 8,192 input tok/s and a predicted local TTFT of 1,000 ms.
+
+These aggregate roofline predictions omit sequential-kernel effects, launch and
+host overhead, token selection, queueing, and delivery. They use configured
+hardware ceilings and a compulsory-byte proxy; they neither establish measured
+performance nor guarantee memory capacity at the plotted batch sizes. The
+[Section 2 notebook plots](code/lab.ipynb) label those assumptions and hold
+context fixed so each point isolates a batch-size change.
 
 ## 7. Use the model to analyze an inference run
 

@@ -110,3 +110,154 @@ the idealized integrated speedup is `1 / ((1-f)+f/s)`. For f=0.1,s=2, that is
 about 1.053, assuming everything else is unchanged. Adapter copies, changed
 layouts, graph behavior, and dispatch can invalidate that assumption. Measure
 kernel-only, adapter-inclusive, and full-model paths separately.
+
+## Three views of the same forward call
+
+Start with [PyTorch Profiler](https://docs.pytorch.org/docs/stable/profiler.html):
+operator names, input shapes, allocations, and CPU/CUDA activity connect model
+code to kernels. Self time excludes nested operators; inclusive parent times
+cannot be added to child times. Shape and allocation collection introduce
+instrumentation overhead. An allocation is not a measurement of DRAM traffic.
+Direct CuTe driver launches may lack a PyTorch external correlation ID. Identify
+the known custom kernels by their generated names and retain unknown kernels as
+unattributed; missing operator correlation does not mean zero GPU work.
+
+Then use [Nsight Systems](https://docs.nvidia.com/nsight-systems/UserGuide/)
+to follow the CPU launch thread, CUDA stream, copies, synchronization, and idle
+intervals. A short kernel separated by long launch gaps suggests a different
+optimization from a long uninterrupted kernel. CUDA events around a forward
+include device idle gaps between launches; they do not sum kernel busy time.
+A CUDA profiler capture range excludes checkpoint loading and JIT warmup.
+
+Finally use [Nsight Compute](https://docs.nvidia.com/nsight-compute/ProfilingGuide/)
+on selected kernels. DRAM bytes, compute activity, occupancy and register use
+can test a traffic/resource hypothesis. Counter collection may replay kernels
+and materially perturb execution. `ERR_NVGPUCTRPERM` means counter evidence is
+unavailable until an administrator enables access; preserve the diagnostic.
+Neither profiler latency nor a modeled byte count substitutes for that evidence.
+Run the three tools separately and measure ordinary latency without any of them.
+
+## Fusion from tensor shapes and rounding boundaries
+
+Let `N=B*T` be rows, `D` hidden width, `I` intermediate width, `R=128` head
+coordinates, `Hq` query heads, `Hkv` KV heads, and `b=2` bytes per BF16 element.
+Reduction arithmetic and attention accumulation use FP32 (four bytes).
+The [pinned 8B config](https://huggingface.co/Qwen/Qwen3-8B/blob/b968826d9c46dd6066d109eabc6255188de91218/config.json)
+has `(D,I,Hq,Hkv)=(4096,12288,32,8)`; the
+[pinned 32B config](https://huggingface.co/Qwen/Qwen3-32B/blob/9216db5781bf21249d130ec9da846c4624c16137/config.json)
+has `(5120,25600,64,8)`. In 32B, `Hq*R=8192`, not `D`.
+
+For RMSNorm, a row computes `a=sum(x_i*x_i)/D`, then
+`y_i=w_i*x_i/sqrt(a+eps)`. The reduction needs each input once; the normalized
+output needs the input again unless it stays in registers. Fusion eliminates
+global FP32 square and normalized intermediates and separate reduction/scaling
+launches. The teaching implementation reads X twice (reduction and output), W
+once, and writes Y once: a logical `4*N*D*b` access count before caching. The
+ideal retained-X implementation would use `3*N*D*b`; neither is measured traffic.
+At `B=4,T=2048,D=5120`, one BF16 intermediate occupies 80 MiB and one FP32
+intermediate 160 MiB. Avoiding a write followed by a read saves twice its size.
+A second read of X may be cheaper than retaining 160 values per lane and spilling.
+
+For SwiGLU, `z=SiLU(g)*u`, where `g,u` have shape `[N,I]` and
+`SiLU(g)=g/(1+exp(-g))`. Separate activation and multiplication read/write
+`g,a,a,u,z`, about `5*N*I*b` logical bytes. A fused kernel reads `g,u` and writes
+`z`, about `3*N*I*b`, removing `2*N*I*b` and one launch. At `B=4,T=2048,I=25600`,
+that removed BF16 intermediate write/read is 800 MiB per layer. This excludes
+GEMMs, allocator effects and caches, so it is a hypothesis to test with profiles.
+
+For Q/K head RMSNorm + RoPE, reduction is over R separately for each head.
+Each rotary pair consists of coordinates `d` and `d+R/2`. Frequencies are
+`theta^(-2*d/R)` for `0<=d<R/2`; the angle is absolute position times frequency.
+For prefix P and T new tokens, positions are `P..P+T-1`; after append KV length
+is `P+T`. Adjacent-pair rotation or restarting positions at zero is incorrect.
+One combined launch handles `N*(Hq+Hkv)` rows with separate shared head weights.
+The normalized Q/K values and their rotary products remain in registers.
+
+The baseline rounds normalized values to BF16 **before** weight multiplication,
+rounds SiLU **before** multiplying the up projection, and rounds rotary sine,
+cosine and both products **before** their sum. The supplied fusions retain these
+boundaries. With this toolchain, casts alone allowed a rotary BF16 multiply/add
+to contract into FMA. The `round_bf16` conversion helper explicitly rounds each
+product before addition; a bitwise regression with exact RMS sums guards this
+boundary. Q/K head normalization uses four consecutive squares per lane and a
+descending shuffle reduction to match the reference's 128-coordinate mean.
+The `scaled_score` helper also preserves the FP32 rounding of `QK/sqrt(128)`
+before subtracting the softmax maximum; contracting these into FMA changes that
+boundary. Other FP32 reduction orders and transcendental approximations can still
+differ. Fused attention changes softmax accumulation order and rounds only its
+final output to BF16; there is no stored probability matrix. Freeze tolerances
+before measurements, check full-vocabulary logits, and report maximum errors.
+
+## CuTe layout and execution model
+
+A layout maps logical coordinates to an element offset using shape and stride.
+The host passes strided tensors through DLPack; last-coordinate stride is one.
+A JIT launcher specializes compile-time widths and tile parameters; dynamic
+shapes and strides permit reuse for growing cache lengths. A compiled function
+must run on PyTorch's **current CUDA stream**, including a nondefault stream.
+Compilation belongs before capture and before measured repeats. CuTe retains zero
+strides as compile-time constants even in a dynamic layout: a broadcast position
+tensor has a different launch argument layout from a non-broadcast tensor. Include
+zero-stride patterns in the JIT cache key and test switching batch sizes in both
+compilation orders; tensor rank/dtype alone is insufficient.
+
+In the supplied reduction, thread `lane+32*warp` owns coordinates
+`lane+32*i` of row `4*block+warp`. A five-stage butterfly shuffle sums 32 lane
+partials. Every participating warp has a uniform valid-row predicate. A partial
+block must not make only some lanes skip a shuffle. Attention assigns each warp
+one query and holds four Q and four output coordinates per lane. Four warps give
+a query tile of four rows; key tiles stream 32 rows, masking the final tile.
+Only key positions through `P+t` are visited. GQA selects `kv_head=h//(Hq/Hkv)`;
+there is no expanded KV tensor or score matrix in global memory.
+
+The supplied attention stores normalized output `o=u/ell`. For each key tile it
+first finds the tile maximum, then sums exponentials with a descending warp tree,
+then accumulates weighted V. With `m'=max(m,m_tile)`, `a=exp(m-m')`, and
+`ell'=a*ell+sum_tile exp(score-m')`, update
+`o'=(a*ell/ell')*o + sum_tile [exp(score-m')/ell']*v`.
+This is the same online-softmax merge derived above. It limits output rescaling
+to tile boundaries and preserves FP32 probability normalization before the V
+multiply. Three passes recompute QK instead of keeping a score fragment that
+could spill to local memory. This deliberate teaching tradeoff increases QK
+arithmetic and K reads; a register/shared-memory tile is a later optimization
+experiment. All accumulation remains FP32.
+
+Each score uses 128 multiply-adds: 256 FLOPs for QK. Weighting and accumulating
+V uses another 256 FLOPs. For one layer, useful causal attention work is
+`4*B*Hq*R*(P*T + T*(T+1)/2)`. Exponentials and normalization are omitted from
+this Chapter 2 matmul ledger. The baseline actually computes a dense rectangle
+before masking, while this kernel computes QK three times per visited key;
+the plots use the **same useful causal work** for both methods, not executed FLOPs.
+At `B=4,Hq=64,T=S=2048`, a single FP32 score matrix is 4 GiB per layer; score
+and probability storage can coexist. The fused implementation avoids both, but
+rereads KV per query and uses SIMT instructions. Storage reduction alone does
+not imply fast prefill or tensor-core utilization.
+
+No shared-memory communication is used in this first implementation, so no CTA
+barrier is needed. If an exercise stages keys for reuse across warps, all
+threads must finish writing before reads, and finish reading before overwriting:
+place `cute.arch.sync_threads()` at both boundaries. Predication must not make
+barriers divergent. Larger query/key tiles trade reuse against register/shared
+memory pressure; verify this on hardware instead of equating occupancy with speed.
+
+## Hardware scope and downstream contract
+
+The verified toolchain is CUTLASS DSL **4.2.1**, with its matching
+[v4.2.1 elementwise example](https://github.com/NVIDIA/cutlass/blob/f3fde58372d33e9a5650ba7b80fc48b3b49d40c8/examples/python/CuTeDSL/ampere/elementwise_add.py),
+on GB10 capability **12.1**, CUDA 13.0.2, driver 580.126.09. The course kernels
+use supported SIMT instructions. The [CuTe quick start](https://docs.nvidia.com/cutlass/latest/media/docs/pythonDSL/quick_start.html)
+explains why release and example versions must agree; its current release may
+require a newer toolkit than this verified combination. The roofline retains
+273 GB/s from [DGX Spark specifications](https://www.nvidia.com/en-us/products/workstations/dgx-spark/)
+and labels 125 dense BF16 TFLOP/s as a **teaching assumption**, not an official
+BF16 specification or calibrated sustained throughput.
+
+`OptimizedQwen3` inherits Chapter 1's forward and checkpoint parameter layout.
+It adds independently selectable operator methods. `decode=True` selects final
+logits; a one-token input selects decode attention, independently of that flag.
+KV is caller-owned `[B,Hkv,P,R]`, equal-length, unpadded, on the parameter device
+and dtype; appending returns new storage. GEMMs and dynamic concatenation stay
+on the original backend. Ragged lengths, paging and in-place ownership belong
+to Chapter 4. Unsupported optimized configurations raise in strict mode or
+produce counted, explicit reference fallbacks in exploratory mode. Import the
+module directly; a previous notebook's live Python state is never required.

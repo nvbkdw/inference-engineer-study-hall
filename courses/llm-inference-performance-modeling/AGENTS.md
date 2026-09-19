@@ -2,7 +2,7 @@
 
 ## Course purpose
 
-This is a code repository for an LLM inference engineering course. It combines
+This is a code repository for an LLM inference engineering educational courses. It combines
 theory for understanding and optimizing performance with practical labs that
 build the inference software stack from scratch and from first principles.
 Students develop one evolving implementation across the kernel, runtime,
@@ -11,6 +11,14 @@ serving, and distributed-system layers.
 For each topic, connect the mathematical model to an implementation, a measurable
 performance prediction, and an experiment that tests the prediction. Explain the
 reasoning behind an optimization and the conditions under which it helps.
+
+Write in a clean, concise, educational style using simple sentences and familiar words. 
+Focus each sentence on one main idea and connect ideas logically. When introducing a new concept, 
+briefly explain what it means and why it matters, starting with intuition before technical detail. 
+Define unfamiliar terms and acronyms, and use concrete examples or analogies when helpful. 
+Build explanations step by step, make key assumptions and cause-and-effect relationships clear, 
+and match the depth to the reader’s background. Remove filler, repetition, and unnecessary jargon 
+while preserving technical accuracy and enough reasoning for the reader to understand how and why things work.
 
 ## Chapter structure
 

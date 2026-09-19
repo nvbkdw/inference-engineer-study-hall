@@ -19,7 +19,8 @@ dependencies = [
 [project.optional-dependencies]
 # P3 student-authored CuTe kernels; match examples and driver to the chosen release.
 kernels = [
-    "nvidia-cutlass-dsl[cu13]>=4.2,<5; sys_platform == 'linux'",
+    "nvidia-cutlass-dsl==4.2.1; sys_platform == 'linux'",
+    "cuda-python==13.4.1; sys_platform == 'linux'",
 ]
 
 [tool.uv]

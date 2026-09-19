@@ -209,3 +209,20 @@ Use [SELF_STUDY.md](SELF_STUDY.md), [PROTOCOL.md](PROTOCOL.md), and
 | P6 precision | Serialized format, actual execution backend, and KV dtype are separate fields |
 | P7 distribution | State records rank ownership and sharding axes |
 | P8 handoff | Destination acknowledges installed state before source ownership is released |
+
+## Chapter 3 verified CuTe environment
+
+The `kernels` extra pins DSL 4.2.1 and cuda-python 13.4.1. It was checked on
+GB10 SM121, CUDA toolkit 13.0.2, driver 580.126.09 and Python 3.13.9 using
+[the matching official example](https://github.com/NVIDIA/cutlass/blob/f3fde58372d33e9a5650ba7b80fc48b3b49d40c8/examples/python/CuTeDSL/ampere/elementwise_add.py)
+(`--M 3 --N 12`). The 4.2.1 wheel has no `cu13` extra. Use the pinned dependency,
+not current examples paired with an older compiler. If sharing a JIT disk cache
+with newer DSL releases produces an incompatible-IR diagnostic, launch with
+`CUTE_DSL_DISABLE_FILE_CACHING=1`; the lab still caches compiled functions in
+memory and warms them before measurement. No driver changes are needed.
+
+Open [Lab 1](../chapters/03_kernels/code/lab.ipynb), then
+[Lab 2](../chapters/03_kernels/code/lab2.ipynb), then
+[Lab 3](../chapters/03_kernels/code/lab3.ipynb). Nsight binaries are system tools.
+On the preparation machine, Nsight Compute reports `ERR_NVGPUCTRPERM`; retain
+its failure log while completing PyTorch/Nsight Systems and ordinary timings.

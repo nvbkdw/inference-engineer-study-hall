@@ -2,10 +2,105 @@
 
 Historical project IDs below are preserved with their original validation records: P2 runtime is now Chapter 4, P3 performance modeling is now Chapter 2, and P4 kernels is now Chapter 3. Current commands and navigation use the new chapter numbers.
 
-The course defaults to DGX Spark GPU measurements. The newest Chapter 1 validation
-is dated 2026-09-12; earlier migration checks below are historical.
+The course defaults to DGX Spark GPU measurements. The newest integrated validation
+is dated 2026-09-18; earlier checks below are historical.
 CPU fixtures remain optional correctness/modeling aids; historical CPU timings
 are not the baseline for the revised labs.
+
+## September 18: Chapter 3 real-model kernels, profiles and matched sweeps
+
+Chapter 3 now has three runnable notebooks and importable CuTe kernels, an
+optimized subclass of Chapter 1's model, and profiling/measurement drivers.
+Chapter 2 and Chapter 3 share the same estimators, timing, aggregation and plots.
+The tested environment was GB10 SM121, driver 580.126.09, CUDA toolkit 13.0.2,
+Python 3.13.9, PyTorch 2.14.0+cu130, CUTLASS DSL 4.2.1, and cuda-python 13.4.1.
+The matching official elementwise example passed; its source, output and version
+record are in `results/p03-toolchain`.
+
+The final regression suite ran **38 tests: 37 passed and one two-GPU test skipped**.
+This includes ten optimized-model/kernel tests covering both model widths,
+partial attention tiles, nonzero prefixes, GQA, extreme scores, supported strides,
+current-stream execution, fallback rules, cache ownership, and BF16 rounding.
+Chapter 1's affected notebook passed from a fresh kernel. Chapter 2's analytical
+and GPU calibration paths passed from fresh kernels; its full real-model sweep
+was exercised through the shared driver by Chapter 3 Lab 3. Chapter 3 Lab 1
+executed from a fresh kernel replaying its completed live baseline artifacts;
+Labs 2 and 3 executed live from fresh kernels. Lab 3’s final reporting additions
+were also checked by replaying the saved observations from a fresh kernel; its
+live execution is preserved as `lab3.live.executed.ipynb`. Executed notebooks and
+test logs are retained under `results/p03-validation`. A trace-attribution test
+covers custom driver launches without PyTorch operator correlation IDs.
+
+Both pinned real checkpoints passed full-vocabulary baseline/optimized and
+cached/full-prefix checks on the documented seven-token fixture, with batches
+1 and 4. The acceptance thresholds stayed `atol=0.25, rtol=0.02` throughout;
+operator thresholds stayed `atol=0.02, rtol=0.02`. These are combined elementwise
+bounds, so a maximum absolute error above 0.25 can pass for a sufficiently large
+reference logit. This establishes the stated fixtures and operator cases, not
+language quality or a general numerical error bound for every prompt.
+
+Integration checks found and fixed a broadcast-position JIT argument-layout bug,
+compiler contraction across BF16 rotary product rounding, Q/K mean reduction
+order, and contraction across FP32 attention score scaling. Failed candidates
+remain marked invalid and are excluded from the final performance comparison.
+The final attention implementation uses normalized online output and three key
+tile passes; its extra QK work is explicitly excluded from the plots' *useful*
+FLOP ledger and discussed in the background.
+
+Final evidence directories:
+
+- Baseline profiles: `results/p03-baseline-initial` — four timed cases and eight
+  PyTorch traces/operator tables, plus two Nsight Systems reports and summaries.
+- Optimized/ablation profiles: `results/p03-optimized-20260918-002326-7d9af3` — eight timed cases,
+  sixteen PyTorch traces with the expected custom kernels, and six Nsight Systems
+  reports and summaries.
+- Matched sweep: `results/p03-sweep-20260918-010508-b32074` — all 36 cases completed, with 972 raw
+  observations, frozen predictions, matched token IDs, source/revision hashes,
+  flags, compilation records, plots, 36 matched speedups and 44 Amdahl comparisons
+including the profiled ablations. No unexpected fallback or compilation during
+  measured repeats was accepted. All workloads completed without memory failures.
+
+Reporting refinements were checked against the saved observations. Original
+sources matching the run manifests are retained in `source-at-start`; final
+analysis/rendering hashes are in `profile_comparison_scope.json` and
+`plot_sources.json`. The sweep saves its complete main-process compilation
+inventory. The profiling study's supplementary main-kernel inventory export
+failed; its aggregate inventory explicitly identifies the six capture processes
+that supplied the complete records. Per-case main-process records remain in
+`status.json`. No compilation times were invented for the missing export.
+
+The sweep uses two complete warmups, three repeats and eight decode calls.
+At prompt length 2048, the following synchronized wall-time medians include greedy
+selection; decode is the mean call latency across the full eight-call window.
+Full repeat ranges are retained in `speedups.csv`. Tradeoff overlays separately
+use only the first decode call, matching the frozen prefix.
+
+| Model | Batch | Prefill baseline → optimized (ms) | Speedup | Decode baseline → optimized (ms) | Speedup |
+|---|---:|---:|---:|---:|---:|
+| 8B | 1 | 1778.6 → 1904.2 | 0.934× | 128.6 → 149.7 | 0.859× |
+| 8B | 4 | 6949.5 → 7378.9 | 0.942× | 230.6 → 181.7 | 1.269× |
+| 32B | 1 | 6649.4 → 7133.6 | 0.932× | 417.4 → 395.2 | 1.056× |
+| 32B | 4 | 25527.3 → 27751.6 | 0.920× | 795.9 → 481.0 | 1.655× |
+
+At batch 1 / context 2048, prefill kernel counts fell from 3,430 to 579 for 8B
+and from 6,090 to 1,027 for 32B, while integrated prefill became slower.
+Instrumented attention time rose from 981 to 1,508 ms and from 3,794 to 5,278 ms,
+respectively. Fusion-only prefill achieved 1.124× / 1.086× speedups; attention-only
+achieved 0.846× / 0.868×. This supports the explanation that this SIMT attention
+kernel's repeated score work outweighs its storage savings at this context.
+These profiler durations remain separate from the uninstrumented measurements.
+The final comparison includes trace idle intervals and 210 selected operator
+records with shapes and inclusive allocation bytes; allocation totals are not
+DRAM traffic and cannot be summed across nested operators. Chapter 2's eleven
+regression tests also passed after the Chapter 3 plot-label refinements.
+
+These are local measurements, not a controlled published GB10 characterization.
+The roofline uses the same compulsory-byte proxy for both implementations and
+labels 125 dense BF16 TFLOP/s as an assumption. Modeled bytes are not counter traffic.
+**Nsight Compute remains incomplete:** the actual attempt and permission preflight
+both report `ERR_NVGPUCTRPERM`. Failure logs and per-target unmeasured statuses are
+retained; administrator-enabled counters are still required. PyTorch/Nsight
+Systems capture and ordinary timing completed independently of this limitation.
 
 ## September 12: consolidated notebooks and full-model custom execution
 

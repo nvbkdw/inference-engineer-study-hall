@@ -17,7 +17,7 @@ For an independent first experiment, start with the [standalone lab](standalone.
 It needs no previous engine implementation and produces saved data and figures.
 Use the [measurable goals](assessment.md) to track entry and full-project completion.
 
-Reuse Chapter 1's validated model and cache semantics, Chapter 2's measured
+Reuse Chapter 3's [OptimizedQwen3](../03_kernels/code/model_opt.py), which inherits Chapter 1's validated model and cache semantics, and Chapter 2/3's measured
 service curves, and Chapter 3's attention adapters and kernel comparisons.
 Keep the validated reference backend available for unsupported shapes and cache
 layouts. This chapter adds request scheduling and bounded KV ownership around

@@ -94,21 +94,126 @@ class PerformanceNotebook(unittest.TestCase):
         self.assertEqual(one['kv_write_bytes'], 147456)
         self.assertGreater(two['intensity'], one['intensity'])
 
-    def test_mfu_aggregates_work_and_time(self):
+    def test_analytical_tradeoff_units_and_batch_scaling(self):
         m = self.m
-        hw = m.Hardware('fixture', 200, {'bfloat16': 100}, 'assumed', 'fixture', 'fixture')
-        measured = m.metrics(dict(flops=1e12, bytes_proxy=1e9, intensity=1000), .1, hw, 'bfloat16')
-        self.assertAlmostEqual(measured['mfu'], .1)
+        # Deliberately compute-bound fixture: 1 TFLOP/s and effectively unlimited bandwidth.
+        hw = m.Hardware('analytical fixture', 1e12, {'bfloat16': 1}, 'assumed', 'fixture', 'fixture')
+        points = m.predict_tradeoffs(m.MODELS['8b'], [1, 2], 2048, hw, 'bfloat16')
+        prefill = [r for r in points if r['phase'] == 'prefill']
+        decode = [r for r in points if r['phase'] == 'decode']
+        self.assertAlmostEqual(prefill[0]['latency_ms'], 29688.66258944)
+        self.assertAlmostEqual(prefill[0]['total_tokens_per_second'], 2048/29.68866258944)
+        self.assertIsNone(prefill[0]['interactivity_tokens_per_second'])
+        self.assertEqual(prefill[0]['token_kind'], 'input')
+        self.assertAlmostEqual(decode[0]['latency_ms'], 16.344743936)
+        self.assertEqual(decode[0]['attended_positions'], 2049)
+        self.assertEqual(decode[0]['prefix_tokens'], 2048)
+        self.assertEqual(decode[0]['token_kind'], 'output')
+        for phase in [prefill, decode]:
+            self.assertAlmostEqual(phase[1]['latency_ms'], 2*phase[0]['latency_ms'])
+            self.assertAlmostEqual(phase[1]['total_tokens_per_second'], phase[0]['total_tokens_per_second'])
+            self.assertEqual(phase[0]['limiting_term'], 'compute')
+        self.assertAlmostEqual(decode[1]['interactivity_tokens_per_second'],
+                               decode[0]['interactivity_tokens_per_second']/2)
+        for r in decode:
+            self.assertAlmostEqual(r['total_tokens_per_second'],
+                                   r['batch']*r['interactivity_tokens_per_second'])
+
+    def test_analytical_decode_weight_amortization(self):
+        m = self.m
+        hw = m.Hardware('memory-bound fixture', 100, {'bfloat16': 1e6}, 'assumed', 'fixture', 'fixture')
+        rows = m.predict_tradeoffs(m.MODELS['32b'], [1, 4], 2048, hw, 'bfloat16')
+        one, four = [r for r in rows if r['phase'] == 'decode']
+        self.assertEqual(one['limiting_term'], 'memory')
+        self.assertGreater(four['total_tokens_per_second'], one['total_tokens_per_second'])
+        self.assertLess(four['interactivity_tokens_per_second'], one['interactivity_tokens_per_second'])
+        for batches, context in [([], 2048), ([0], 2048), ([1], 0)]:
+            with self.assertRaises(ValueError):
+                m.predict_tradeoffs(m.MODELS['8b'], batches, context, hw, 'bfloat16')
+
+    def test_decode_throughput_aggregates_tokens_and_time(self):
+        m = self.m
+        measured = m.metrics(dict(flops=1e12, bytes_proxy=1e9), .1)
+        self.assertAlmostEqual(measured['achieved_tflops'], 10)
+        for invalid in [0, -1, float('nan')]:
+            with self.assertRaises(ValueError):
+                m.metrics(dict(flops=1, bytes_proxy=1), invalid)
         rows = []
-        for repeat in range(3):
-            for f, t in [(1e12, 100), (9e12, 300)]:
-                rows.append(dict(model='8b', batch=1, prompt=2, phase='decode', repeat=repeat,
-                                 flops=f, bytes_proxy=1e9, cuda_ms=t, token_ready_ms=t+1))
-        summary = m.summarize_model_rows(rows, hw, 'bfloat16')[0]
-        self.assertEqual(summary['achieved_tflops'], 25)  # 10 TFLOP / 0.4 seconds, not mean(10, 30).
-        self.assertEqual(summary['mfu'], .25)
-        self.assertEqual(summary['mfu_basis'], 'assumed')
-        self.assertEqual(summary['token_ready_ms'], 201)
+        for repeat, scale in enumerate([1, 2, 3]):
+            for step, (f, t) in enumerate([(1e12, 100), (9e12, 300)]):
+                rows.append(dict(model='8b', batch=4, prompt=128, phase='decode', repeat=repeat,
+                                 flops=f, bytes_proxy=1e9, cuda_ms=t*scale, token_ready_ms=t*scale,
+                                 throughput_tokens=4, prefix_tokens=128+step))
+        summary = m.summarize_model_rows(rows)[0]
+        # At the median repeat: 8 emitted tokens / 0.8 s, not mean(4/0.2, 4/0.6).
+        self.assertEqual(summary['tokens_per_second'], 10)
+        self.assertEqual(summary['tokens_per_second_max'], 20)
+        self.assertAlmostEqual(summary['tokens_per_second_min'], 8/1.2)
+        self.assertEqual(summary['latency_ms'], 400)
+        self.assertEqual(summary['latency_min_ms'], 200)
+        self.assertEqual(summary['latency_max_ms'], 600)
+        self.assertEqual(summary['throughput_token_kind'], 'output')
+        self.assertEqual(summary['prefix_tokens_min'], 128)
+        self.assertEqual(summary['prefix_tokens_max'], 129)
+        self.assertEqual(summary['achieved_tflops'], 12.5)  # 10 TFLOP / 0.8 s.
+        self.assertEqual(summary['repeats'], 3)
+
+    def test_tradeoff_overlay_matches_fixed_context_and_first_decode_call(self):
+        rows = []
+        for repeat, ms in enumerate([100, 200, 400]):
+            for prompt in [128, 512]:
+                for phase, prefix in [('prefill', 0), ('decode', prompt), ('decode', prompt+1)]:
+                    rows.append(dict(model='8b', batch=2, prompt=prompt, phase=phase, repeat=repeat,
+                        prefix_tokens=prefix, flops=1e9, bytes_proxy=1e8,
+                        cuda_ms=ms, token_ready_ms=1 if prefix == prompt+1 else ms,
+                        throughput_tokens=2*prompt if phase == 'prefill' else 2))
+        points = self.m.summarize_tradeoff_observations(rows, 128)
+        self.assertEqual(len(points), 2)
+        prefill = next(r for r in points if r['phase'] == 'prefill')
+        decode = next(r for r in points if r['phase'] == 'decode')
+        self.assertEqual(prefill['latency_ms'], 200)
+        self.assertEqual(prefill['total_tokens_per_second'], 1280)
+        self.assertEqual(decode['interactivity_tokens_per_second'], 5)
+        self.assertEqual(decode['total_tokens_per_second'], 10)
+        self.assertEqual(decode['interactivity_tokens_per_second_min'], 2.5)
+        self.assertEqual(decode['interactivity_tokens_per_second_max'], 10)
+        self.assertEqual(decode['repeats'], 3)
+        self.assertEqual(self.m.summarize_tradeoff_observations(rows, 2048), [])
+
+        # With two repeats, median(1/t) differs from 1/median(t).
+        even = self.m.summarize_tradeoff_observations([r for r in rows if r['repeat'] < 2], 128)
+        decode = next(r for r in even if r['phase'] == 'decode')
+        self.assertEqual(decode['interactivity_tokens_per_second'], 7.5)
+        self.assertEqual(decode['total_tokens_per_second'], 15)
+
+        hw = self.m.Hardware('fixture', 273, {'bfloat16': 125}, 'assumed', 'fixture', 'fixture')
+        predictions = [dict(model='8b', **r) for r in
+                      self.m.predict_tradeoffs(self.m.MODELS['8b'], [1, 2], 128, hw, 'bfloat16')]
+        fig, axes = self.m.plot_tradeoffs(predictions, 128, 'bfloat16', 'assumed', observed=points)
+        try:
+            # Real observations are drawn as errorbar markers on both panels.
+            self.assertEqual(len(axes[0].containers), 1)
+            self.assertEqual(len(axes[1].containers), 1)
+            x, y = axes[1].containers[0].lines[0].get_data()
+            self.assertEqual(list(x), [5])
+            self.assertEqual(list(y), [10])
+            fig.canvas.draw()
+        finally:
+            self.m.plt.close(fig)
+
+    def test_prefill_throughput_counts_input_tokens_and_uses_wall_time(self):
+        rows = [dict(model='8b', batch=2, prompt=128, phase='prefill', repeat=r,
+                     flops=1e12, bytes_proxy=1e9, cuda_ms=100, token_ready_ms=t,
+                     throughput_tokens=256, prefix_tokens=0)
+                for r, t in enumerate([200, 400, 600])]
+        summary = self.m.summarize_model_rows(rows)[0]
+        self.assertEqual(summary['tokens_per_second'], 640)  # 256 input tokens / 0.4 s.
+        self.assertEqual(summary['throughput_token_kind'], 'input')
+        self.assertEqual(summary['latency_ms'], 400)
+        self.assertEqual(summary['forward_ms'], 100)
+        rows[0]['token_ready_ms'] = 0
+        with self.assertRaises(ValueError):
+            self.m.summarize_model_rows(rows)
 
     @unittest.skipUnless(importlib.util.find_spec('transformers') and importlib.util.find_spec('torch'), 'PyTorch and Transformers required')
     def test_ledger_matches_actual_qwen_linear_shapes(self):

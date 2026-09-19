@@ -2,11 +2,23 @@
 
 ## 1. Establish a static baseline (3 hours)
 
-Reuse the Chapter 1/2 model and import Chapter 3's kernel adapters with greedy
+Import Chapter 3's [OptimizedQwen3](../03_kernels/code/model_opt.py) with greedy
 decoding, a contiguous cache, and fixed batches. Use Chapter 2's service-time
 predictions updated with Chapter 3's measured backend behavior. Freeze the
 backend during scheduling comparisons; retain the validated reference fallback
 for unsupported shapes. Carry the same model and kernel modules forward.
+Import from the course root using
+`importlib.import_module('chapters.03_kernels.code.model_opt')`; use
+`load_checkpoint(snapshot, device, dtype, optimizations=..., strict=True)`.
+The inherited `forward(token_ids, kv_cache=None, decode=False)` returns logits
+and a new per-layer list of `(K,V)`, `[B,Hkv,P+T,128]`. It never mutates the
+caller's prefix. `decode=True` selects only final logits, including during
+prefill. Dense equal-length BF16 inputs are supported; add explicit ragged/page
+adapters here and include gathering/copying in your timing. Keep strict mode for
+measured supported cases and inspect `execution_metadata()` for fallback counts.
+The [Chapter 3 sweep](../03_kernels/code/lab3.ipynb) supplies implementation-tagged
+service observations; do not mix baseline and optimized rows.
+
 Create W1/W2 request fixtures from the [protocol](../../shared/PROTOCOL.md). Log
 arrival, scheduled work, processed length, and each emitted token timestamp.
 Predict memory at batch 1/4/16 before admitting work.
