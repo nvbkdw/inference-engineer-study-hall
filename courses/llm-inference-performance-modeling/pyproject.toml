@@ -14,6 +14,7 @@ dependencies = [
     "huggingface-hub>=1,<2",
     "ipykernel>=6,<8",
     "jupyterlab>=4,<5",
+    "torch==2.14.0"
 ]
 
 [project.optional-dependencies]
