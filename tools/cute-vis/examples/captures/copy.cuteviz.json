@@ -1,0 +1,922 @@
+{
+  "schema_version": "1.1",
+  "producer_version": "0.1.0",
+  "observation": "compile-time",
+  "compiler": {
+    "status": "known",
+    "value": {
+      "name": "nvidia-cutlass-dsl",
+      "version": "4.8.0"
+    },
+    "reason": null
+  },
+  "target": {
+    "status": "known",
+    "value": "sm_80",
+    "reason": null
+  },
+  "parameters": {
+    "tile": [
+      8,
+      8
+    ],
+    "threads": 32
+  },
+  "sources": [
+    {
+      "id": "source-8788260768c8e259",
+      "path": "/home/huangruoyu/workspace/inference-engineer-study-hall/tools/cute-vis/examples/inspect_copy.py",
+      "text": "\"\"\"A real 8×8 global → shared → global copy, plus layout inspection examples.\n\nCUTE_DSL_NO_CACHE=1 python examples/inspect_copy.py\ncuteviz serve examples/captures/copy.cuteviz.json\n\"\"\"\n\nfrom pathlib import Path\n\nimport cutlass\nimport cutlass.cute as cute\nimport cutlass.memory\n\nimport cuteviz\n\n\n@cute.kernel\ndef copy_kernel(src: cute.Pointer, dst: cute.Pointer, probes: cutlass.Constexpr):\n    gA = cute.make_tensor(src, cute.make_layout((8, 8), stride=(8, 1)))\n    gB = cute.make_tensor(dst, cute.make_layout((8, 8), stride=(8, 1)))\n    sA = cutlass.memory.SmemAllocator().allocate_tensor(cutlass.Float32, gA.layout)\n    tiled_copy = cute.make_tiled_copy_tv(\n        cute.make_copy_atom(cute.nvgpu.CopyUniversalOp(), cutlass.Float32),\n        cute.make_layout((4, 8), stride=(8, 1)),\n        cute.make_layout((2, 1)),\n    )\n    if cutlass.const_expr(probes):\n        cuteviz.inspect(\"gA\", gA)\n        cuteviz.inspect(\"sA\", sA)\n        cuteviz.inspect_copy(\"load_A\", tiled_copy, src=gA, dst=sA)\n        cuteviz.inspect(\"nested\", cute.make_layout(((2, 4), 8), stride=((32, 8), 1)))\n        swizzled = cute.make_tensor(\n            sA.iterator, cute.make_composed_layout(cute.make_swizzle(2, 0, 3), 0, sA.layout)\n        )\n        cuteviz.inspect(\"swizzled_sA\", swizzled, parent=\"sA\", transform=\"Swizzle<2,0,3>\")\n        tile = cute.local_tile(gA, (4, 4), (1, 0))\n        cuteviz.inspect(\"bottom_left\", tile, parent=\"gA\", transform=\"local_tile((4,4), (1,0))\")\n    thread_copy = tiled_copy.get_slice(cute.arch.thread_idx()[0])\n    cute.copy(tiled_copy, thread_copy.partition_S(gA), thread_copy.partition_D(sA))\n    cute.arch.sync_threads()\n    cute.copy(tiled_copy, thread_copy.partition_S(sA), thread_copy.partition_D(gB))\n\n\n@cute.jit\ndef entry(src: cute.Pointer, dst: cute.Pointer, probes: cutlass.Constexpr = True):\n    copy_kernel(src, dst, probes).launch(grid=(1, 1, 1), block=(32, 1, 1))\n\n\ndef compile_example(path):\n    pointer = cute.runtime.make_ptr(cutlass.Float32, 0, cute.AddressSpace.gmem, assumed_align=16)\n    with cuteviz.capture(path, parameters={\"tile\": [8, 8], \"threads\": 32}):\n        return cute.compile(entry, pointer, pointer)\n\n\nif __name__ == \"__main__\":\n    destination = Path(__file__).parent / \"captures\" / \"copy.cuteviz.json\"\n    compile_example(destination)\n    print(destination)\n"
+    }
+  ],
+  "objects": [
+    {
+      "id": "probe-9ae2dc192398b1cd",
+      "label": "gA",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 27,
+        "end_line": 27
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            8,
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "gmem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              8,
+              8
+            ],
+            "stride": [
+              8,
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 16,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-ef4a9bc17b5399dc",
+      "label": "sA",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 28,
+        "end_line": 28
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            8,
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              8,
+              8
+            ],
+            "stride": [
+              8,
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 4,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-1649e0c245b2e407",
+      "label": "load_A",
+      "kind": "copy",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 29,
+        "end_line": 29
+      },
+      "fields": {
+        "operation": {
+          "status": "known",
+          "value": "cutlass.cute.nvgpu.common.CopyUniversalOp",
+          "reason": null
+        },
+        "execution_group": {
+          "status": "known",
+          "value": {
+            "kind": "threads",
+            "size": 32
+          },
+          "reason": null
+        },
+        "tile_shape": {
+          "status": "known",
+          "value": [
+            8,
+            8
+          ],
+          "reason": null
+        },
+        "correspondence": {
+          "status": "known",
+          "value": "Same logical element in the compiler's reference tile; source and destination owners can differ",
+          "reason": null
+        }
+      },
+      "views": [
+        {
+          "role": "S",
+          "shape": [
+            8,
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "gmem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              8,
+              8
+            ],
+            "stride": [
+              8,
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": {
+            "kind": "affine",
+            "shape": [
+              [
+                8,
+                4
+              ],
+              [
+                1,
+                2
+              ]
+            ],
+            "stride": [
+              [
+                8,
+                2
+              ],
+              [
+                0,
+                1
+              ]
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "ownership": {
+            "status": "known",
+            "value": "Compiler TiledCopy thread/value mapping within one tile",
+            "reason": null
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 16,
+            "reason": null
+          },
+          "observed_object": "probe-1f9cc05f105f537c"
+        },
+        {
+          "role": "D",
+          "shape": [
+            8,
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              8,
+              8
+            ],
+            "stride": [
+              8,
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": {
+            "kind": "affine",
+            "shape": [
+              [
+                8,
+                4
+              ],
+              [
+                1,
+                2
+              ]
+            ],
+            "stride": [
+              [
+                8,
+                2
+              ],
+              [
+                0,
+                1
+              ]
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "ownership": {
+            "status": "known",
+            "value": "Compiler TiledCopy thread/value mapping within one tile",
+            "reason": null
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 4,
+            "reason": null
+          },
+          "observed_object": "probe-008f76df6adc08e0"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "probe-1f9cc05f105f537c",
+          "kind": "operand",
+          "transform": "S",
+          "mapping": null,
+          "mapping_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "This relationship has no captured coordinate transform"
+          }
+        },
+        {
+          "target": "probe-008f76df6adc08e0",
+          "kind": "operand",
+          "transform": "D",
+          "mapping": null,
+          "mapping_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "This relationship has no captured coordinate transform"
+          }
+        }
+      ],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-1f9cc05f105f537c",
+      "label": "load_A.S",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 29,
+        "end_line": 29
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            8,
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "gmem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              8,
+              8
+            ],
+            "stride": [
+              8,
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 16,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-008f76df6adc08e0",
+      "label": "load_A.D",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 29,
+        "end_line": 29
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            8,
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              8,
+              8
+            ],
+            "stride": [
+              8,
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 4,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-c9a311b1ec9b91ae",
+      "label": "nested",
+      "kind": "layout",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 30,
+        "end_line": 30
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            [
+              2,
+              4
+            ],
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "layout",
+            "reason": null
+          },
+          "dtype": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No tensor dtype"
+          },
+          "element_bits": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No tensor dtype width"
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              [
+                2,
+                4
+              ],
+              8
+            ],
+            "stride": [
+              [
+                32,
+                8
+              ],
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Pointer alignment unavailable"
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-52abe21c8f4f34df",
+      "label": "swizzled_sA",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 34,
+        "end_line": 34
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            8,
+            8
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "compose",
+            "shape": [
+              8,
+              8
+            ],
+            "stride": null,
+            "left": {
+              "kind": "swizzle",
+              "shape": null,
+              "stride": null,
+              "left": null,
+              "right": null,
+              "offset": 0,
+              "bits": 2,
+              "base": 0,
+              "shift": 3
+            },
+            "right": {
+              "kind": "affine",
+              "shape": [
+                8,
+                8
+              ],
+              "stride": [
+                8,
+                1
+              ],
+              "left": null,
+              "right": null,
+              "offset": 0,
+              "bits": 0,
+              "base": 0,
+              "shift": 0
+            },
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 4,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [
+        {
+          "target": "probe-ef4a9bc17b5399dc",
+          "kind": "declared_parent",
+          "transform": "Swizzle<2,0,3>",
+          "mapping": null,
+          "mapping_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "This relationship has no captured coordinate transform"
+          }
+        }
+      ],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-69ef7e4c03185ce5",
+      "label": "bottom_left",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-8788260768c8e259",
+        "line": 36,
+        "end_line": 36
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            4,
+            4
+          ],
+          "storage": {
+            "status": "known",
+            "value": "gmem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              4,
+              4
+            ],
+            "stride": [
+              8,
+              1
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 16,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [
+        {
+          "target": "probe-9ae2dc192398b1cd",
+          "kind": "derived_parent",
+          "transform": "cute.local_tile",
+          "mapping": {
+            "operation": "cute.local_tile",
+            "origin": [
+              4,
+              0
+            ],
+            "matrix": [
+              [
+                1,
+                0
+              ],
+              [
+                0,
+                1
+              ]
+            ],
+            "parameters": {}
+          },
+          "mapping_status": {
+            "status": "known",
+            "value": "Compiler-derived parent logical coordinate transform",
+            "reason": null
+          }
+        },
+        {
+          "target": "probe-9ae2dc192398b1cd",
+          "kind": "declared_parent",
+          "transform": "local_tile((4,4), (1,0))",
+          "mapping": null,
+          "mapping_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "This relationship has no captured coordinate transform"
+          }
+        }
+      ],
+      "diagnostics": []
+    }
+  ],
+  "diagnostics": [],
+  "outcome": "complete"
+}

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cuteviz"
+version = "0.1.0"
+description = "Local compile-time inspection of CuTeDSL kernels"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["fastapi>=0.115,<1", "uvicorn>=0.34,<1", "pydantic>=2.10,<3", "tensor-layouts==0.3.2"]
+
+[project.optional-dependencies]
+capture = ["nvidia-cutlass-dsl==4.8.0"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "httpx>=0.28,<1", "ruff>=0.11,<1", "build>=1.2,<2"]
+
+[project.scripts]
+cuteviz = "cuteviz.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cuteviz"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["compiler: requires the pinned CuTeDSL compiler (no GPU execution)", "gpu: executes a kernel on a compatible GPU"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F", "I"]

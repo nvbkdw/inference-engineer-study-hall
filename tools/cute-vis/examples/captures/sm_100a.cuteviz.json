@@ -1,0 +1,854 @@
+{
+  "schema_version": "1.0",
+  "producer_version": "0.1.0",
+  "observation": "compile-time",
+  "compiler": {
+    "status": "known",
+    "value": {
+      "name": "nvidia-cutlass-dsl",
+      "version": "4.8.0"
+    },
+    "reason": null
+  },
+  "target": {
+    "status": "known",
+    "value": "sm_100a",
+    "reason": null
+  },
+  "parameters": {},
+  "sources": [
+    {
+      "id": "source-5c7cc751af8c8cb8",
+      "path": "/home/huangruoyu/workspace/inference-engineer-study-hall/tools/cute-vis/examples/inspect_mma.py",
+      "text": "\"\"\"Compile dense MMA fragments for inspection without launching a GPU kernel.\n\n    CUTE_DSL_ARCH=sm_90a CUTE_DSL_NO_CACHE=1 python examples/inspect_mma.py\n    CUTE_DSL_ARCH=sm_100a CUTE_DSL_NO_CACHE=1 python examples/inspect_mma.py\n\nThis demonstrates operand setup for GEMM. It does not allocate tensor memory or\nexecute an asynchronous MMA; use probes beside these objects in your own GEMM.\n\"\"\"\n\nimport os\nfrom pathlib import Path\n\nimport cutlass\nimport cutlass.cute as cute\nfrom cutlass.cute.nvgpu import OperandMajorMode, tcgen05, warp, warpgroup\n\nimport cuteviz\n\n\n@cute.kernel\ndef fragments():\n    if cutlass.const_expr(os.environ[\"CUTE_DSL_ARCH\"] == \"sm_90a\"):\n        tiled = cute.make_tiled_mma(\n            warpgroup.MmaF16BF16Op(\n                cutlass.Float16,\n                cutlass.Float32,\n                (64, 32, 16),\n                warpgroup.OperandSource.SMEM,\n                OperandMajorMode.K,\n                OperandMajorMode.K,\n            )\n        )\n        atom = warpgroup.make_smem_layout_atom(warpgroup.SmemLayoutAtomKind.K_SW32, cutlass.Float16)\n    elif cutlass.const_expr(os.environ[\"CUTE_DSL_ARCH\"] == \"sm_100a\"):\n        tiled = cute.make_tiled_mma(\n            tcgen05.MmaF16BF16Op(\n                cutlass.Float16,\n                cutlass.Float32,\n                (128, 32, 16),\n                tcgen05.CtaGroup.ONE,\n                tcgen05.OperandSource.SMEM,\n                OperandMajorMode.K,\n                OperandMajorMode.K,\n            )\n        )\n        atom = tcgen05.make_smem_layout_atom(tcgen05.SmemLayoutAtomKind.K_SW32, cutlass.Float16)\n    else:\n        tiled = cute.make_tiled_mma(\n            warp.MmaF16BF16Op(cutlass.Float16, cutlass.Float32, (16, 8, 16))\n        )\n        atom = cute.make_layout((8, 16), stride=(16, 1))\n    m, n, k = tiled.get_tile_size(0), tiled.get_tile_size(1), tiled.get_tile_size(2)\n    # Placeholder SMEM addresses are never dereferenced; this entry is compiled only.\n    ptr = cute.make_ptr(cutlass.Float16, 0, cute.AddressSpace.smem, assumed_align=128)\n    if cutlass.const_expr(os.environ[\"CUTE_DSL_ARCH\"] in (\"sm_90a\", \"sm_100a\")):\n        ptr = cute.recast_ptr(ptr, atom.inner, cutlass.Float16)\n        atom = atom.outer\n    sA = cute.make_tensor(ptr, cute.tile_to_shape(atom, (m, k), (1, 0)))\n    sB = cute.make_tensor(ptr, cute.tile_to_shape(atom, (n, k), (1, 0)))\n    thr = tiled.get_slice(0)\n    a = tiled.make_fragment_A(thr.partition_A(sA))\n    b = tiled.make_fragment_B(thr.partition_B(sB))\n    acc = tiled.make_fragment_C(tiled.partition_shape_C((m, n)))\n    cuteviz.inspect(\"sA\", sA)\n    cuteviz.inspect(\"sB\", sB)\n    cuteviz.inspect_mma(\"mma\", tiled, a=a, b=b, c=acc)\n\n\n@cute.jit\ndef entry():\n    fragments().launch(grid=(1, 1, 1), block=(128, 1, 1))\n\n\nif __name__ == \"__main__\":\n    target = os.environ.get(\"CUTE_DSL_ARCH\", \"sm_80\")\n    os.environ.setdefault(\"CUTE_DSL_ARCH\", target)\n    destination = Path(__file__).parent / \"captures\" / f\"{target}.cuteviz.json\"\n    with cuteviz.capture(destination):\n        cute.compile(entry)\n    print(destination)\n"
+    }
+  ],
+  "objects": [
+    {
+      "id": "probe-709c27d0587ddf6e",
+      "label": "sA",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-5c7cc751af8c8cb8",
+        "line": 64,
+        "end_line": 64
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            [
+              8,
+              16
+            ],
+            [
+              16,
+              1
+            ]
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float16",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 16,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              [
+                8,
+                16
+              ],
+              [
+                16,
+                1
+              ]
+            ],
+            "stride": [
+              [
+                16,
+                128
+              ],
+              [
+                1,
+                0
+              ]
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Position-dependent pointer swizzle: logical offsets are available, but physical byte placement requires the runtime base phase."
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": {
+            "kind": "swizzle",
+            "shape": null,
+            "stride": null,
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 1,
+            "base": 4,
+            "shift": 3
+          },
+          "pointer_alignment": {
+            "status": "known",
+            "value": 128,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-0b641d647bbccb47",
+      "label": "sB",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-5c7cc751af8c8cb8",
+        "line": 65,
+        "end_line": 65
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            [
+              8,
+              4
+            ],
+            [
+              16,
+              1
+            ]
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float16",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 16,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              [
+                8,
+                4
+              ],
+              [
+                16,
+                1
+              ]
+            ],
+            "stride": [
+              [
+                16,
+                128
+              ],
+              [
+                1,
+                0
+              ]
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Position-dependent pointer swizzle: logical offsets are available, but physical byte placement requires the runtime base phase."
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": {
+            "kind": "swizzle",
+            "shape": null,
+            "stride": null,
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 1,
+            "base": 4,
+            "shift": 3
+          },
+          "pointer_alignment": {
+            "status": "known",
+            "value": 128,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-d639532b0ea79501",
+      "label": "mma",
+      "kind": "mma",
+      "source": {
+        "source_id": "source-5c7cc751af8c8cb8",
+        "line": 66,
+        "end_line": 66
+      },
+      "fields": {
+        "operation": {
+          "status": "known",
+          "value": "cutlass.cute.nvgpu.tcgen05.mma.MmaF16BF16Op",
+          "reason": null
+        },
+        "family": {
+          "status": "known",
+          "value": "Blackwell tcgen05",
+          "reason": null
+        },
+        "instruction_shape": {
+          "status": "known",
+          "value": [
+            128,
+            32,
+            16
+          ],
+          "reason": null
+        },
+        "tile_shape": {
+          "status": "known",
+          "value": [
+            128,
+            32,
+            16
+          ],
+          "reason": null
+        },
+        "execution_group": {
+          "status": "known",
+          "value": {
+            "kind": "single-CTA, single issuing thread",
+            "size": 1,
+            "partition_count": 1,
+            "note": "Issue participation is separate from operand storage and ownership"
+          },
+          "reason": null
+        },
+        "a_major_mode": {
+          "status": "known",
+          "value": "OperandMajorMode.K",
+          "reason": null
+        },
+        "b_major_mode": {
+          "status": "known",
+          "value": "OperandMajorMode.K",
+          "reason": null
+        },
+        "cta_group": {
+          "status": "known",
+          "value": "CtaGroup.ONE",
+          "reason": null
+        }
+      },
+      "views": [
+        {
+          "role": "A",
+          "shape": [
+            128,
+            16
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "None",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Element width unavailable: AttributeError: 'NoneType' object has no attribute 'width'"
+          },
+          "layout": null,
+          "layout_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Descriptor operand: inspect the backing shared-memory tensor for byte placement"
+          },
+          "tv_layout": {
+            "kind": "affine",
+            "shape": [
+              1,
+              [
+                [
+                  128,
+                  16
+                ],
+                [
+                  1,
+                  1
+                ]
+              ]
+            ],
+            "stride": [
+              0,
+              [
+                [
+                  1,
+                  128
+                ],
+                [
+                  0,
+                  0
+                ]
+              ]
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Collective operand storage; TV partition indices are not owning GPU threads"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Pointer alignment unavailable"
+          },
+          "observed_object": "probe-65d4a1987f1b6aeb"
+        },
+        {
+          "role": "B",
+          "shape": [
+            32,
+            16
+          ],
+          "storage": {
+            "status": "known",
+            "value": "smem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "None",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Element width unavailable: AttributeError: 'NoneType' object has no attribute 'width'"
+          },
+          "layout": null,
+          "layout_status": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Descriptor operand: inspect the backing shared-memory tensor for byte placement"
+          },
+          "tv_layout": {
+            "kind": "affine",
+            "shape": [
+              1,
+              [
+                [
+                  32,
+                  16
+                ],
+                [
+                  1,
+                  1
+                ]
+              ]
+            ],
+            "stride": [
+              0,
+              [
+                [
+                  1,
+                  32
+                ],
+                [
+                  0,
+                  0
+                ]
+              ]
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Collective operand storage; TV partition indices are not owning GPU threads"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Pointer alignment unavailable"
+          },
+          "observed_object": "probe-9cce180166889242"
+        },
+        {
+          "role": "C",
+          "shape": [
+            128,
+            32
+          ],
+          "storage": {
+            "status": "known",
+            "value": "tmem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": null,
+          "layout_status": {
+            "status": "known",
+            "value": "Supplied fragment: relative tensor-memory data-path/column coordinates",
+            "reason": null
+          },
+          "tv_layout": {
+            "kind": "affine",
+            "shape": [
+              1,
+              [
+                [
+                  128,
+                  32
+                ],
+                [
+                  1,
+                  1
+                ]
+              ]
+            ],
+            "stride": [
+              0,
+              [
+                [
+                  1,
+                  128
+                ],
+                [
+                  0,
+                  0
+                ]
+              ]
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Collective operand storage; TV partition indices are not owning GPU threads"
+          },
+          "address_unit": "tmem",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": {
+            "kind": "affine",
+            "shape": [
+              [
+                128,
+                32
+              ],
+              1,
+              1
+            ],
+            "stride": [
+              [
+                65536,
+                1
+              ],
+              0,
+              0
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Pointer alignment unavailable"
+          },
+          "observed_object": "probe-fd1cdb2a79a136d7"
+        }
+      ],
+      "relationships": [
+        {
+          "target": "probe-65d4a1987f1b6aeb",
+          "kind": "operand",
+          "transform": "A"
+        },
+        {
+          "target": "probe-9cce180166889242",
+          "kind": "operand",
+          "transform": "B"
+        },
+        {
+          "target": "probe-fd1cdb2a79a136d7",
+          "kind": "operand",
+          "transform": "C"
+        }
+      ],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-65d4a1987f1b6aeb",
+      "label": "mma.A",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-5c7cc751af8c8cb8",
+        "line": 66,
+        "end_line": 66
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "storage": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Memory space unavailable: ValueError: tensor<OpResult(%7 = \"cute.get_iter\"(<<UNKNOWN SSA VALUE>>) : (!cute_nvgpu.smem_desc_view<!cute_nvgpu.smem_desc, \"(1,1,1):(0,0,0)\">) -> !cute_nvgpu.smem_desc) o (1,1,1):(0,0,0)> doesn't have memspace"
+          },
+          "dtype": {
+            "status": "known",
+            "value": "None",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Element width unavailable: AttributeError: 'NoneType' object has no attribute 'width'"
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              1,
+              1,
+              1
+            ],
+            "stride": [
+              0,
+              0,
+              0
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Pointer alignment unavailable"
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-9cce180166889242",
+      "label": "mma.B",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-5c7cc751af8c8cb8",
+        "line": 66,
+        "end_line": 66
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            1,
+            1,
+            1
+          ],
+          "storage": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Memory space unavailable: ValueError: tensor<OpResult(%15 = \"cute.get_iter\"(<<UNKNOWN SSA VALUE>>) : (!cute_nvgpu.smem_desc_view<!cute_nvgpu.smem_desc, \"(1,1,1):(0,0,0)\">) -> !cute_nvgpu.smem_desc) o (1,1,1):(0,0,0)> doesn't have memspace"
+          },
+          "dtype": {
+            "status": "known",
+            "value": "None",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Element width unavailable: AttributeError: 'NoneType' object has no attribute 'width'"
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              1,
+              1,
+              1
+            ],
+            "stride": [
+              0,
+              0,
+              0
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "element",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Pointer alignment unavailable"
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    },
+    {
+      "id": "probe-fd1cdb2a79a136d7",
+      "label": "mma.C",
+      "kind": "tensor",
+      "source": {
+        "source_id": "source-5c7cc751af8c8cb8",
+        "line": 66,
+        "end_line": 66
+      },
+      "fields": {},
+      "views": [
+        {
+          "role": "tensor",
+          "shape": [
+            [
+              128,
+              32
+            ],
+            1,
+            1
+          ],
+          "storage": {
+            "status": "known",
+            "value": "tmem",
+            "reason": null
+          },
+          "dtype": {
+            "status": "known",
+            "value": "Float32",
+            "reason": null
+          },
+          "element_bits": {
+            "status": "known",
+            "value": 32,
+            "reason": null
+          },
+          "layout": {
+            "kind": "affine",
+            "shape": [
+              [
+                128,
+                32
+              ],
+              1,
+              1
+            ],
+            "stride": [
+              [
+                65536,
+                1
+              ],
+              0,
+              0
+            ],
+            "left": null,
+            "right": null,
+            "offset": 0,
+            "bits": 0,
+            "base": 0,
+            "shift": 0
+          },
+          "layout_status": {
+            "status": "known",
+            "value": "Relative to this view's base",
+            "reason": null
+          },
+          "tv_layout": null,
+          "ownership": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "No producing operation was probed"
+          },
+          "address_unit": "tmem",
+          "base_address": {
+            "status": "unavailable",
+            "value": null,
+            "reason": "Runtime base pointer is unresolved"
+          },
+          "fragment_layout": null,
+          "pointer_swizzle": null,
+          "pointer_alignment": {
+            "status": "known",
+            "value": 1,
+            "reason": null
+          },
+          "observed_object": null
+        }
+      ],
+      "relationships": [],
+      "diagnostics": []
+    }
+  ],
+  "diagnostics": [],
+  "outcome": "complete"
+}

@@ -227,9 +227,7 @@ $[B,T,1]$ denominator that broadcasts over $D$. Do not reduce over tokens
 or batch items. The output retains the input shape.
 
 The denominator controls vector magnitude; the learned $\gamma$ restores
-per-channel scale. This operation does not subtract a mean, add a learned bias,
-or divide by the sum of squares without averaging. $\epsilon$ belongs inside
- the square root.
+per-channel scale. $\epsilon$ belongs inside the square root.
 
 For the first normalization in the block,
 
