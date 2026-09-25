@@ -11,6 +11,7 @@ import torch
 import cutlass
 import cutlass.cute as cute
 from cutlass.cute.runtime import from_dlpack
+from cutlass.cute.testing import JitArguments
 import cuda.bindings.driver as cuda
 
 
@@ -22,6 +23,11 @@ from shared import experiment
 
 # Direct execution places this file's directory on Python's import path.
 from utils import _launch, _check_bf16, benchmark_cuda
+
+
+def _tensor(x):
+    # return from_dlpack(x.detach(), assumed_align=128).mark_layout_dynamic(leading_dim=x.ndim-1)
+    return from_dlpack(x.detach(), assumed_align=128).mark_compact_shape_dynamic(mode=0)
 
 @cute.jit
 def warp_sum(x):
@@ -59,12 +65,6 @@ def _rms_norm_kernel(mX, weight, mY, rows: cutlass.Int32, width: cutlass.Constex
     # Each warp reuses the same weight vector; its thread coordinate is a lane.
     thrW = tidfrgW[(lane, None)]
 
-    print('gX', gX)
-    print('gY', gY)
-    print('thrX', thrX)
-    print('thrY', thrY)
-    print('thrW', thrW)
-
     # A block owns four rows. Skip missing rows in the final block; the
     # predicate is identical for all lanes participating in a warp shuffle.
     if bidx * 4 + tidx // 32 < rows:
@@ -87,9 +87,12 @@ def _rms_norm_launcher(x, weight, y, width: cutlass.Constexpr, eps: cutlass.Cons
     M = 4 # M rows per CTA
     # coalesced_bytes = 128
     thr_layout = cute.make_ordered_layout((4, 32), order=(1, 0))
-    val_layout = cute.make_ordered_layout((1, cute.ceil_div(width, 32),), order=(1, 0))
+    # val_layout = cute.make_layout((1, cute.ceil_div(width, 32)), stride=(0, 32))
+    val_layout = cute.make_layout((1, cute.ceil_div(width, 32)), stride=(0, 1))
     tiler_m, tv_layout = cute.make_layout_tv(thr_layout, val_layout)
     print('tiler_m', tiler_m)
+    print('thr_layout', thr_layout)
+    print('val_layout', val_layout)
     print('tv_layout', tv_layout)
 
     mX = cute.zipped_divide(x, tiler_m)
@@ -102,11 +105,13 @@ def _rms_norm_launcher(x, weight, y, width: cutlass.Constexpr, eps: cutlass.Cons
         stream=stream
     )
 
-def rms_norm(x, weight, eps):
-    """Return a new BF16 tensor normalized with FP32 arithmetic on CUDA.
+def rms_norm(x, weight, eps, y=None):
+    """Normalize into optional reusable BF16 output with FP32 arithmetic.
 
     Width must be divisible by 32, and leading dimensions must be collapsible
     with view(). Each lane loads width / 32 consecutive columns of one row.
+    If supplied, y must match x's shape, dtype, and CUDA device. Otherwise a
+    fresh output is allocated. The benchmark prepares and reuses its own output.
     """
     _check_bf16(x, weight)
     if weight.shape != (x.shape[-1],) or not math.isfinite(eps) or eps <= 0:
@@ -115,11 +120,16 @@ def rms_norm(x, weight, eps):
     width = x.shape[-1]
     if width % 32:
         raise ValueError("This vectorized RMSNorm kernel requires width divisible by 32")
-    y = torch.empty_like(x)
+    if y is None:
+        y = torch.empty_like(x)
+    else:
+        _check_bf16(x, y)
+        if y.shape != x.shape:
+            raise ValueError("Output shape must match input shape")
     _launch(
         'rms_norm',
         _rms_norm_launcher,
-        (x.view(-1, width), weight, y.view(-1, width)),
+        [_tensor(t) for t in (x.view(-1, width), weight, y.view(-1, width))],
         (width, eps)
     )
     return y
@@ -148,19 +158,59 @@ def correctness_check():
     print("RMSNorm correctness passed against the FP32 oracle.")
 
 
+def _prepare_cute_benchmark(x, weight, eps):
+    """Own a fixed output and compiled arguments on the current CUDA stream."""
+    width = x.shape[-1]
+    y = torch.empty_like(x)
+    compiled, args, stream = _launch(
+        'rms_norm', _rms_norm_launcher,
+        [_tensor(t) for t in (x.view(-1, width), weight, y.view(-1, width))],
+        (width, eps),
+    )
+
+    def run():
+        compiled(*args, stream)
+
+    return run, y
+
+
+def _prepare_torch_benchmark(x, weight, eps):
+    """Torch reference operations with reusable FP32 scratch and BF16 output."""
+    x_fp32 = torch.empty_like(x, dtype=torch.float32)
+    squared = torch.empty_like(x_fp32)
+    scale = torch.empty((*x.shape[:-1], 1), device=x.device, dtype=torch.float32)
+    weight_fp32 = torch.empty_like(weight, dtype=torch.float32)
+    y = torch.empty_like(x)
+
+    def run():
+        x_fp32.copy_(x)
+        torch.square(x_fp32, out=squared)
+        torch.mean(squared, dim=-1, keepdim=True, out=scale)
+        scale.add_(eps)
+        torch.rsqrt(scale, out=scale)
+        torch.mul(x_fp32, scale, out=x_fp32)
+        weight_fp32.copy_(weight)
+        torch.mul(x_fp32, weight_fp32, out=x_fp32)
+        y.copy_(x_fp32)
+
+    return run, y
+
+
 def benchmark(
     shape=(1024, 16, 128), *, eps=1e-6, device="cuda:0", warmup=10,
     repeats=20, inner=100, seed=2026, out=None,
 ):
-    """Compare eager Torch and CuTe function calls with CUDA events.
+    """Compare prepared Torch and CuTe work using CUDA-graph replay.
 
-    Both paths use BF16 input/output and FP32 arithmetic. The Torch baseline
-    includes rms_norm_ref(...).to(torch.bfloat16). Timing includes allocations
-    and possible GPU idle gaps from Python dispatch, but excludes compilation,
-    correctness checks, fixture creation, and warmup. No CUDA graphs are used.
+    Both paths preallocate output and all scratch buffers, use BF16 input/output,
+    and perform FP32 arithmetic. Torch runs the rms_norm_ref operations with
+    reusable buffers, including input/weight conversion and the BF16 output cast.
+    CuTe reuses a compiled kernel and prepared arguments. Timing excludes setup,
+    allocation, compilation, capture, correctness, and per-call Python dispatch.
 
-    CuTe's testing utility performs ``warmup`` calls before each repeat.
-    Each raw sample is the average of ``inner`` calls. Save metadata, a
+    The shared utility performs ``warmup`` eager calls, captures ``inner`` calls
+    once, and performs one untimed graph replay before measuring ``repeats``
+    replays with CUDA events. Each sample is ms per call. Save metadata, a
     prediction, raw samples, and a summary in a new/empty ``out`` directory;
     the default is a timestamped directory under the course's results/ folder.
     Return the summary dictionary. See shared/PROTOCOL.md for timing scope.
@@ -193,14 +243,15 @@ def benchmark(
             python=platform.python_version(), platform=platform.platform(),
             dependencies={name: version(name) for name in ("nvidia-cutlass-dsl", "cuda-python")},
             input_dtype="bfloat16", output_dtype="bfloat16", arithmetic_dtype="float32",
-            backends=["torch eager + BF16 output cast", "CuTe DSL public rms_norm function"],
-            warmup=warmup, repeats=repeats, calls_per_repeat=inner, cuda_graphs=False,
-            timing_backend="cutlass.cute.testing.benchmark via utils.benchmark_cuda",
-            warmup_policy="one initialization call, then warmup calls before each repeat",
-            timing="CUDA events on current stream; end event synchronized; ms per call",
-            includes="public function calls, allocation effects, and possible dispatch gaps",
-            excludes="fixture creation, correctness checks, JIT compilation, and warmup",
-            cache_policy="reuse the same input and weight tensors; no cache flush",
+            backends=["Torch reference operations with preallocated FP32 scratch and BF16 output", "precompiled CuTe RMSNorm with preallocated BF16 output"],
+            warmup=warmup, repeats=repeats, calls_per_repeat=inner, cuda_graphs=True,
+            preallocated_buffers=True, workspace_count=1,
+            timing_backend="torch.cuda.CUDAGraph and CUDA events via utils.benchmark_cuda",
+            warmup_policy="warmup eager calls per workspace; one untimed graph replay; one capture reused for all repeats",
+            timing="CUDA events around graph replay on capture stream; end event synchronized; ms per call",
+            includes="GPU operations and amortized graph replay overhead; Torch input/weight conversion and BF16 output cast",
+            excludes="fixture/output/scratch allocation, argument preparation, correctness checks, JIT compilation, graph capture, warmup, and per-call Python dispatch",
+            cache_policy="reuse fixed input, weight, output, and scratch buffers; no cache flush",
             correctness=dict(oracle="FP32 rms_norm_ref", rtol=4e-3, atol=1e-5),
             source_sha256={
                 str(path.relative_to(COURSE_ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
@@ -210,30 +261,37 @@ def benchmark(
         )
         experiment.write_json(out / "manifest.json", manifest)
         experiment.write_json(out / "prediction.json", dict(
-            hypothesis="CuTe should benefit from fusing the reduction and scaling into one kernel, avoiding Torch's global FP32 intermediates; dispatch overhead can dominate small inputs.",
+            hypothesis="CuTe should benefit from fusing reduction and scaling, avoiding Torch's global FP32 intermediates. Both paths use preallocated buffers and graph replay so per-call Python setup cannot mask kernel differences.",
             fused_logical_min_bytes=4 * math.prod(shape) + 2 * shape[-1],
             byte_derivation="2 bytes per input + 2 per output + one 2-byte weight vector; minimum logical traffic, not measured DRAM traffic",
             expected_speedup=None,
-            prediction_scope="qualitative; no calibrated bandwidth or launch-overhead model",
+            prediction_scope="qualitative graph-replay kernel comparison; no calibrated bandwidth model or public-function latency claim",
         ))
 
         generator = torch.Generator(device=device).manual_seed(seed)
         x = torch.randn(shape, dtype=torch.bfloat16, device=device, generator=generator)
         weight = torch.randn(shape[-1], dtype=torch.bfloat16, device=device, generator=generator)
-        functions = {
-            "torch_reference_bf16": lambda: rms_norm_ref(x, weight, eps).to(x.dtype),
-            "cute_kernel_bf16": lambda: rms_norm(x, weight, eps),
+        preparations = {
+            "torch_reference_bf16": _prepare_torch_benchmark,
+            "cute_kernel_bf16": _prepare_cute_benchmark,
         }
-        # This first CuTe call compiles the kernel before any timing starts.
         expected = rms_norm_ref(x, weight, eps)
-        for fn in functions.values():
-            torch.testing.assert_close(fn().float(), expected, rtol=4e-3, atol=1e-5)
-        del expected
 
-        samples = {
-            name: benchmark_cuda(fn, repeats=repeats, inner=inner, warmup=warmup, device=device)
-            for name, fn in functions.items()
-        }
+        def make_workspace(prepare):
+            # Invoked once on the utility's capture stream, before capture/timing.
+            run, output = prepare(x, weight, eps)
+            run()
+            torch.testing.assert_close(output.float(), expected, rtol=4e-3, atol=1e-5)
+            return JitArguments(run, output)
+
+        samples = {}
+        for name, prepare in preparations.items():
+            samples[name] = benchmark_cuda(
+                lambda run, output: run(),
+                workspace_generator=lambda prepare=prepare: make_workspace(prepare),
+                repeats=repeats, inner=inner, warmup=warmup, device=device,
+            )
+        del expected
 
     rows = [
         dict(backend=name, repeat=i, calls=inner, cuda_ms=ms)
@@ -244,16 +302,21 @@ def benchmark(
         for name, values in samples.items()
     }
     speedup = timings["torch_reference_bf16"]["median_ms"] / timings["cute_kernel_bf16"]["median_ms"]
-    summary = dict(shape=list(shape), timings=timings, speedup=speedup, output_dir=str(out.resolve()))
+    summary = dict(
+        shape=list(shape), timings=timings, speedup=speedup,
+        cuda_graphs=True, preallocated_buffers=True,
+        timing_scope="prepared GPU work via graph replay; ms per call",
+        output_dir=str(out.resolve()),
+    )
     experiment.write_csv(out / "results.csv", rows)
     experiment.write_json(out / "summary.json", summary)
     print(f"\nRMSNorm {shape} on {hardware['gpu_name']}; BF16 input/output, FP32 arithmetic")
-    print(f"CUDA-event function latency: {warmup} warmups/repeat, {repeats} repeats, {inner} calls/repeat")
+    print(f"CUDA-graph latency with preallocated buffers: {warmup} eager warmups, {repeats} replays, {inner} calls/replay")
     print(f"{'Backend':<25} {'Median (us)':>12} {'Min (us)':>12} {'Max (us)':>12}")
     for name, timing in timings.items():
         print(f"{name:<25} {timing['median_ms'] * 1000:12.3f} {timing['min_ms'] * 1000:12.3f} {timing['max_ms'] * 1000:12.3f}")
     print(f"CuTe speedup (Torch / CuTe): {speedup:.2f}x")
-    print("Torch includes the BF16 output cast; both timings may include Python dispatch gaps.")
+    print("Torch includes input/weight conversion and BF16 output cast; setup and per-call Python dispatch are excluded.")
     print(f"Saved raw measurements and metadata to {out.resolve()}")
     return summary
 
@@ -261,7 +324,7 @@ def benchmark(
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Check or benchmark the experimental RMSNorm kernel")
     parser.add_argument("--benchmark", action="store_true", help="Run correctness gates, then compare Torch and CuTe latency")
-    parser.add_argument("--shape", type=int, nargs="+", default=(1024, 16, 128))
+    parser.add_argument("--shape", type=int, nargs="+", default=(1024, 16, 4096))
     parser.add_argument("--eps", type=float, default=1e-6)
     parser.add_argument("--device", default="cuda:0")
     parser.add_argument("--warmup", type=int, default=10)

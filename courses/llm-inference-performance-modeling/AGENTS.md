@@ -100,6 +100,15 @@ Document unavailable hardware or checkpoints as unmeasured scope.
 
 ## Repository workflow
 
+Use the local [MiniInfra submodule](../miniinfra/) as a source for copying and
+adapting implementations into this course. Start with its
+[chapter index](../miniinfra/README.md) to find the relevant mechanism. Record
+the source file path and submodule commit when adapting code, and preserve any
+applicable attribution and license notices. Adapt model dimensions, interfaces,
+and benchmarks to this course's Qwen3 configurations and experiment protocol.
+Keep adapted shared logic in one course module and import it in later chapters,
+following the progressive implementation rules above.
+
 Use `pyproject.toml` and [shared/SETUP.md](shared/SETUP.md) for the environment,
 [shared/PROTOCOL.md](shared/PROTOCOL.md) for experiments, and existing course code
 as the starting point. Preserve unrelated work in the checkout.

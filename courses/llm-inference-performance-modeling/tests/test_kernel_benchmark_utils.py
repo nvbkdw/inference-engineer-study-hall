@@ -48,6 +48,7 @@ class KernelBenchmarkUtilities(unittest.TestCase):
         workspaces = []
 
         def workspace_generator():
+            self.assertFalse(torch.cuda.is_current_stream_capturing())
             x = torch.full((1024,), len(workspaces) + 1, device="cuda", dtype=torch.float32)
             out = torch.empty_like(x)
             workspaces.append((x, out))
@@ -62,6 +63,37 @@ class KernelBenchmarkUtilities(unittest.TestCase):
         for x, out in workspaces:
             torch.testing.assert_close(out, x * 2)
 
+    def test_graph_replays_reuse_buffers_without_calling_python(self):
+        original = torch.cuda.current_stream()
+        workspaces = []
+        calls = []
+
+        def prepare():
+            self.assertFalse(torch.cuda.is_current_stream_capturing())
+            x = torch.arange(1024, device="cuda", dtype=torch.float32)
+            out = torch.empty_like(x)
+            count = torch.zeros((), device="cuda", dtype=torch.int32)
+            workspaces.append((x, out, count))
+            return self.utils.cute_testing.JitArguments(x, out, count)
+
+        def run(x, out, count):
+            calls.append((torch.cuda.is_current_stream_capturing(), out.data_ptr()))
+            torch.square(x, out=out)
+            count.add_(1)
+
+        samples = self.utils.benchmark_cuda(
+            run, workspace_generator=prepare, warmup=2, repeats=3, inner=4,
+        )
+        self.check_samples(samples)
+        self.assertEqual(len(workspaces), 1)
+        x, out, count = workspaces[0]
+        self.assertTrue(any(capturing for capturing, _ in calls))
+        self.assertEqual({ptr for _, ptr in calls}, {out.data_ptr()})
+        # Replays execute the GPU work without invoking the Python callback.
+        self.assertGreater(count.item(), len(calls))
+        self.assertEqual(torch.cuda.current_stream(), original)
+        torch.testing.assert_close(out, x.square())
+
     @unittest.skipUnless(importlib.util.find_spec("triton"), "Triton required for L2 eviction timing")
     def test_triton_cold_cache_on_explicit_stream(self):
         original = torch.cuda.current_stream()
@@ -69,14 +101,17 @@ class KernelBenchmarkUtilities(unittest.TestCase):
         x = torch.arange(1024, device="cuda", dtype=torch.float32)
         out = torch.empty_like(x)
         observed_streams = []
+        captured = []
 
         def run():
             observed_streams.append(torch.cuda.current_stream())
+            captured.append(torch.cuda.is_current_stream_capturing())
             torch.add(x, 1, out=out)
 
         samples = self.utils.benchmark_cuda_cold(run, warmup_ms=1, repeat_ms=2, stream=selected)
         self.check_samples(samples)
         self.assertTrue(all(stream == selected for stream in observed_streams))
+        self.assertTrue(any(captured))
         self.assertEqual(torch.cuda.current_stream(), original)
         torch.testing.assert_close(out, x + 1)
 
@@ -86,8 +121,21 @@ class KernelBenchmarkUtilities(unittest.TestCase):
                 self.utils.benchmark_cuda(lambda: None, **kwargs)
         with self.assertRaisesRegex(TypeError, "torch.cuda.Stream"):
             self.utils.benchmark_cuda(lambda: None, stream=0)
+        with self.assertRaisesRegex(ValueError, "cover every workspace"):
+            self.utils.benchmark_cuda(
+                lambda: None, inner=1, workspace_count=2,
+                workspace_generator=lambda: self.utils.cute_testing.JitArguments(),
+            )
+        with self.assertRaisesRegex(TypeError, "JitArguments"):
+            self.utils.benchmark_cuda(lambda: None, workspace_generator=lambda: ())
+        with self.assertRaisesRegex(TypeError, "workspace_generator must be callable"):
+            self.utils.benchmark_cuda(lambda: None, workspace_generator=1)
         with self.assertRaisesRegex(ValueError, "positive finite"):
             self.utils.benchmark_cuda_cold(lambda: None, repeat_ms=float("nan"))
+
+    def test_rejects_capture_without_cuda_work(self):
+        with self.assertRaisesRegex(ValueError, "capture CUDA work"):
+            self.utils.benchmark_cuda(lambda: None, warmup=1, repeats=1, inner=1)
 
 
 if __name__ == "__main__":
