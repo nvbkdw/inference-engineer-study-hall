@@ -40,6 +40,8 @@ Chapter 1 has one [theory and reading guide](chapters/01_reconstruct_qwen3/backg
 
 The code provides small executable references for core mechanisms. Students extend these into the full engine, CuTe kernels, real quantization path, and serving experiments described in the tutorials. CPU checks and illustrative calculations are labeled separately from required GPU and real-checkpoint validation.
 
+The local [MiniInfra submodule](../miniinfra/README.md) at `../miniinfra` is a source for copying and adapting implementations into this course. Record the source path and commit for adapted code, and use this course's model configurations, shared modules, and experiment protocol. See [setup](shared/SETUP.md#local-miniinfra-source) to initialize the pinned checkout.
+
 The [project dependency manifest](pyproject.toml) includes all supplied-script and checkpoint dependencies. The setup guide uses `uv sync --python 3.12` in a dedicated `.venv-spark`; add `--extra kernels` for the P3 CuTe DSL toolchain.
 
 After activating a Spark-compatible CUDA environment using [setup](shared/SETUP.md), run the first measurement and optional correctness checks:

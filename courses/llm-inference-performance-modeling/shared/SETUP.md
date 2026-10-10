@@ -6,6 +6,23 @@ CPU fixtures are optional mathematical/state checks; CPU timing is not an infere
 performance baseline. Chapters 2 and 5 also contain untimed simulations and cost
 models, which must be distinguished from measured GPU results.
 
+## Local MiniInfra source
+
+[MiniInfra](../../miniinfra/README.md) is a sibling submodule at `../miniinfra`
+relative to the course directory. Use it as a source for copying and adapting
+mechanisms into the course's reusable modules. From the course directory,
+initialize the revision pinned by this repository:
+
+```bash
+git -C "$(git rev-parse --show-toplevel)" submodule update --init -- courses/miniinfra
+git -C ../miniinfra rev-parse HEAD
+```
+
+Record that commit and the original file path when adapting code. MiniInfra's
+inference examples use Qwen3-0.6B and an RTX 3080 Ti; adapt their configuration
+and benchmark assumptions to this course's models and hardware, then check
+correctness and measure the adapted implementation.
+
 ## Use a Spark-compatible CUDA environment
 
 All Python dependencies for the supplied notebooks, scripts, plots, checkpoint tools, and

@@ -1,0 +1,3 @@
+[submodule "courses/miniinfra"]
+	path = courses/miniinfra
+	url = https://github.com/SVDX-lab/miniinfra.git

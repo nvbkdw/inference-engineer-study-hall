@@ -25,6 +25,16 @@ with an event synchronization. Model time includes the declared forward/generati
 boundary. Serving time uses monotonic client timestamps including queueing.
 Kernel timing does not measure network or admission delay.
 
+The experimental [kernel benchmark helpers](../chapters/03_kernels/exp/kernels/utils.py)
+use preallocated input/output/scratch workspaces and CUDA-graph replay. Workspace
+factories run once before capture; timed callables reuse their buffers. Record
+graph usage, calls per replay, workspace count, and cache policy in the manifest.
+Exclude allocation, compilation, argument preparation, capture, and correctness
+checks from these kernel observations. Graph timing includes GPU operations and
+amortized graph-launch overhead; it is a different boundary from an ordinary
+public-function call with Python dispatch. Model and serving clocks retain their
+declared boundaries above.
+
 For request arrival `a`, emitted token times `e[0:N]`, completion `c`:
 
 ```text
