@@ -84,9 +84,9 @@ def _rms_norm_kernel(mX, weight, mY, rows: cutlass.Int32, width: cutlass.Constex
 
 @cute.jit
 def _rms_norm_launcher(x, weight, y, width: cutlass.Constexpr, eps: cutlass.Constexpr, stream: cuda.CUstream):
-    M = 4 # M rows per CTA
+    M = 16 # M rows per CTA
     # coalesced_bytes = 128
-    thr_layout = cute.make_ordered_layout((4, 32), order=(1, 0))
+    thr_layout = cute.make_ordered_layout((M, 32), order=(1, 0))
     # val_layout = cute.make_layout((1, cute.ceil_div(width, 32)), stride=(0, 32))
     val_layout = cute.make_layout((1, cute.ceil_div(width, 32)), stride=(0, 1))
     tiler_m, tv_layout = cute.make_layout_tv(thr_layout, val_layout)
