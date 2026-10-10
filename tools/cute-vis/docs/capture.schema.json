@@ -1,0 +1,538 @@
+{
+  "$defs": {
+    "CapturedObject": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 1000,
+          "title": "Label",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "layout",
+            "tensor",
+            "copy",
+            "mma",
+            "unsupported"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Span"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "fields": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Observation"
+          },
+          "title": "Fields",
+          "type": "object"
+        },
+        "views": {
+          "items": {
+            "$ref": "#/$defs/View"
+          },
+          "maxItems": 8,
+          "title": "Views",
+          "type": "array"
+        },
+        "relationships": {
+          "items": {
+            "$ref": "#/$defs/Relationship"
+          },
+          "title": "Relationships",
+          "type": "array"
+        },
+        "diagnostics": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Diagnostics",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "label",
+        "kind"
+      ],
+      "title": "CapturedObject",
+      "type": "object"
+    },
+    "CoordinateMap": {
+      "additionalProperties": false,
+      "description": "Parent logical coordinates = origin + matrix @ child + parameter terms.",
+      "properties": {
+        "operation": {
+          "enum": [
+            "cute.local_tile",
+            "cute.slice"
+          ],
+          "title": "Operation",
+          "type": "string"
+        },
+        "origin": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Origin",
+          "type": "array"
+        },
+        "matrix": {
+          "items": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Matrix",
+          "type": "array"
+        },
+        "parameters": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CoordinateParameter"
+          },
+          "maxProperties": 32,
+          "title": "Parameters",
+          "type": "object"
+        }
+      },
+      "required": [
+        "operation",
+        "origin",
+        "matrix"
+      ],
+      "title": "CoordinateMap",
+      "type": "object"
+    },
+    "CoordinateParameter": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 200,
+          "title": "Label",
+          "type": "string"
+        },
+        "coefficients": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Coefficients",
+          "type": "array"
+        }
+      },
+      "required": [
+        "label",
+        "coefficients"
+      ],
+      "title": "CoordinateParameter",
+      "type": "object"
+    },
+    "JsonValue": {},
+    "Layout": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "default": "affine",
+          "enum": [
+            "affine",
+            "compose",
+            "swizzle"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "stride": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "left": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Layout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "right": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Layout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "offset": {
+          "default": 0,
+          "title": "Offset",
+          "type": "integer"
+        },
+        "bits": {
+          "default": 0,
+          "maximum": 16,
+          "minimum": 0,
+          "title": "Bits",
+          "type": "integer"
+        },
+        "base": {
+          "default": 0,
+          "maximum": 32,
+          "minimum": 0,
+          "title": "Base",
+          "type": "integer"
+        },
+        "shift": {
+          "default": 0,
+          "maximum": 32,
+          "minimum": -32,
+          "title": "Shift",
+          "type": "integer"
+        }
+      },
+      "title": "Layout",
+      "type": "object"
+    },
+    "Observation": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "default": "known",
+          "enum": [
+            "known",
+            "symbolic",
+            "unsupported",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "value": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        }
+      },
+      "title": "Observation",
+      "type": "object"
+    },
+    "Relationship": {
+      "additionalProperties": false,
+      "properties": {
+        "target": {
+          "title": "Target",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "declared_parent",
+            "operand",
+            "derived_parent"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "transform": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Transform"
+        },
+        "mapping": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CoordinateMap"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "mapping_status": {
+          "$ref": "#/$defs/Observation"
+        }
+      },
+      "required": [
+        "target",
+        "kind"
+      ],
+      "title": "Relationship",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 1000000,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "text"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Span": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "title": "Source Id",
+          "type": "string"
+        },
+        "line": {
+          "minimum": 1,
+          "title": "Line",
+          "type": "integer"
+        },
+        "end_line": {
+          "minimum": 1,
+          "title": "End Line",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_id",
+        "line",
+        "end_line"
+      ],
+      "title": "Span",
+      "type": "object"
+    },
+    "View": {
+      "additionalProperties": false,
+      "description": "A logical operand or tensor view, with independently known mapping fields.",
+      "properties": {
+        "role": {
+          "title": "Role",
+          "type": "string"
+        },
+        "shape": {
+          "$ref": "#/$defs/JsonValue"
+        },
+        "storage": {
+          "$ref": "#/$defs/Observation"
+        },
+        "dtype": {
+          "$ref": "#/$defs/Observation"
+        },
+        "element_bits": {
+          "$ref": "#/$defs/Observation"
+        },
+        "layout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Layout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "layout_status": {
+          "$ref": "#/$defs/Observation"
+        },
+        "tv_layout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Layout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "ownership": {
+          "$ref": "#/$defs/Observation"
+        },
+        "address_unit": {
+          "default": "element",
+          "enum": [
+            "element",
+            "tmem",
+            "none"
+          ],
+          "title": "Address Unit",
+          "type": "string"
+        },
+        "base_address": {
+          "$ref": "#/$defs/Observation"
+        },
+        "fragment_layout": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Layout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pointer_swizzle": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Layout"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pointer_alignment": {
+          "$ref": "#/$defs/Observation"
+        },
+        "observed_object": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observed Object"
+        }
+      },
+      "required": [
+        "role",
+        "shape",
+        "storage"
+      ],
+      "title": "View",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "default": "1.1",
+      "enum": [
+        "1.0",
+        "1.1"
+      ],
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "producer_version": {
+      "default": "0.1.0",
+      "title": "Producer Version",
+      "type": "string"
+    },
+    "observation": {
+      "const": "compile-time",
+      "default": "compile-time",
+      "title": "Observation",
+      "type": "string"
+    },
+    "compiler": {
+      "$ref": "#/$defs/Observation"
+    },
+    "target": {
+      "$ref": "#/$defs/Observation"
+    },
+    "parameters": {
+      "additionalProperties": {
+        "$ref": "#/$defs/JsonValue"
+      },
+      "title": "Parameters",
+      "type": "object"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "maxItems": 100,
+      "title": "Sources",
+      "type": "array"
+    },
+    "objects": {
+      "items": {
+        "$ref": "#/$defs/CapturedObject"
+      },
+      "maxItems": 5000,
+      "title": "Objects",
+      "type": "array"
+    },
+    "diagnostics": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "outcome": {
+      "default": "complete",
+      "enum": [
+        "complete",
+        "partial",
+        "empty"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    }
+  },
+  "title": "Capture",
+  "type": "object"
+}

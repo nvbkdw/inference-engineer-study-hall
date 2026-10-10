@@ -1,0 +1,24 @@
+# Static site builds (mdBook / Honkit / MkDocs)
+book/
+_book/
+site/
+
+# Lab artifacts — keep summarized results in markdown, not raw dumps
+labs/**/results/
+*.nsys-rep
+*.sqlite
+*.json.gz
+*.csv
+
+# Python scratch
+__pycache__/
+.venv/
+venv/
+*.pyc
+.ipynb_checkpoints/
+
+# Editors / OS
+.DS_Store
+.vscode/
+.idea/
+*.swp
